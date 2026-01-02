@@ -1,0 +1,338 @@
+// ------------------------------------------------------
+// MDT Register Digital System - Prisma Schema
+// ------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ------------------------------------------------------
+// ENUMS
+// ------------------------------------------------------
+
+enum Role {
+  Admin
+  Coordinator
+  Consultant
+  Viewer
+}
+
+enum Gender {
+  Male
+  Female
+  Other
+}
+
+enum CaseStatus {
+  DRAFT
+  SUBMITTED
+  PENDING
+  REVIEWED
+  RESUBMITTED
+  ARCHIVED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum NotificationType {
+  MEETING_CREATED
+  MEETING_UPDATED
+  MEETING_CANCELLED
+  CASE_SUBMITTED
+  CASE_RESUBMITTED
+  CASE_POSTPONED
+  MDT_REVIEW_COMPLETED
+  MANUAL_NOTIFICATION
+  MEETING_REQUEST
+}
+
+// ------------------------------------------------------
+// MODELS
+// ------------------------------------------------------
+
+model User {
+  id           String @id @default(uuid())
+  name         String
+  loginId      String @unique
+  passwordHash String
+
+  // Current active role (Admin, Coordinator, Consultant, Viewer)
+  role Role
+
+  // Stores the user's original role when they are promoted to Coordinator
+  previousRole Role? // Only Consultant or Viewer should be stored here
+
+  departmentId String? // Admin & Viewer can have no department
+
+  // Optional profile fields
+  phoneNumber          String?
+  email                String?
+  medicalCouncilNumber String?
+  degrees              String? // Comma-separated or JSON string for multiple degrees
+
+  // Digital signature fields
+  signatureUrl           String? // URL/path to signature image (uploaded by admin)
+  signatureAuthenticated Boolean @default(false) // Whether consultant has authenticated the signature
+
+  // Telegram notification
+  telegramId String? // Telegram user ID for notifications
+
+  department          Department?          @relation(fields: [departmentId], references: [id])
+  createdCases        Case[]               @relation("CaseCreator")
+  specialistsOpinions SpecialistsOpinion[]
+
+  createdMeetings      Meeting[]             @relation("MeetingCreator")
+  meetingAttendees     MeetingAttendee[]
+  consensusReports     ConsensusReport[]     @relation("ConsensusCreator")
+  auditLogs            AuditLog[]
+  telegramVerification TelegramVerification?
+  notifications        Notification[]
+  backups              Backup[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Department {
+  id   String @id @default(uuid())
+  name String @unique
+
+  users               User[]
+  cases               Case[]               @relation("PresentingDepartment")
+  specialistsOpinions SpecialistsOpinion[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Meeting {
+  id                  String        @id @default(uuid())
+  date                DateTime
+  description         String?
+  status              MeetingStatus @default(SCHEDULED)
+  cancellationRemarks String?
+  createdById         String
+
+  createdBy     User              @relation("MeetingCreator", fields: [createdById], references: [id])
+  cases         Case[]            @relation("MeetingAssignment")
+  attendees     MeetingAttendee[]
+  notifications Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MeetingAttendee {
+  id        String @id @default(uuid())
+  meetingId String
+  userId    String
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, userId])
+  @@map("meeting_attendees")
+}
+
+model Case {
+  id          String  @id @default(uuid())
+  patientName String
+  mrn         String?
+  age         Int
+  gender      Gender
+
+  presentingDepartmentId String
+  presentingDepartment   Department @relation("PresentingDepartment", fields: [presentingDepartmentId], references: [id])
+
+  // Rich-text stored as JSON, includes inline images
+  clinicalDetails   Json
+  radiologyFindings Json
+  pathologyFindings Json
+
+  diagnosisStage String
+  treatmentPlan  String
+  question       String
+
+  status CaseStatus
+
+  createdById String
+  createdBy   User   @relation("CaseCreator", fields: [createdById], references: [id])
+
+  assignedMeetingId String?
+  assignedMeeting   Meeting? @relation("MeetingAssignment", fields: [assignedMeetingId], references: [id])
+
+  submittedAt DateTime?
+  reviewedAt  DateTime?
+  archivedAt  DateTime?
+
+  // Links section - JSON array of {label: string, url: string}
+  links Json?
+
+  // Follow-up information for reviewed cases
+  followUp String?
+
+  attachments         CaseAttachment[]
+  specialistsOpinions SpecialistsOpinion[]
+  consensusReport     ConsensusReport?
+  notifications       Notification[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CaseAttachment {
+  id         String @id @default(uuid())
+  caseId     String
+  fileName   String
+  fileType   String
+  fileSize   Int
+  storageKey String
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
+model SpecialistsOpinion {
+  id           String @id @default(uuid())
+  caseId       String
+  consultantId String
+  departmentId String
+  opinionText  String
+
+  case       Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  consultant User       @relation(fields: [consultantId], references: [id])
+  department Department @relation(fields: [departmentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ConsensusReport {
+  id             String   @id @default(uuid())
+  caseId         String   @unique
+  finalDiagnosis String
+  mdtConsensus   String
+  meetingDate    DateTime
+  remarks        String?
+
+  createdById String
+  createdBy   User   @relation("ConsensusCreator", fields: [createdById], references: [id])
+  case        Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id     String @id @default(uuid())
+  action String // e.g., "LOGIN", "CASE_SUBMIT", "CONSENSUS_EDIT", "COORDINATOR_ASSIGN"
+  userId String // User who performed the action
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Optional related entity IDs
+  caseId       String? // For case-related actions
+  targetUserId String? // For user-related actions (e.g., coordinator assignment)
+
+  details   String? // JSON string for additional details
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+}
+
+model HospitalSettings {
+  id        String   @id @default("single") // Single record with fixed ID
+  name      String? // Hospital name (text)
+  logoUrl   String? // Hospital logo image URL (path to uploaded image)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hospital_settings")
+}
+
+model TelegramSettings {
+  id        String   @id @default("single") // Single record with fixed ID
+  enabled   Boolean  @default(false)
+  botName   String? // Bot username (without @)
+  botToken  String? // Encrypted bot token
+  qrCodeUrl String? // QR code image URL (path to uploaded image)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("telegram_settings")
+}
+
+model EmailSettings {
+  id        String   @id @default("single") // Single record with fixed ID
+  enabled   Boolean  @default(false)
+  host      String? // SMTP host
+  port      Int?     // SMTP port
+  secure    Boolean  @default(false) // Use TLS/SSL
+  username  String? // SMTP username
+  password  String? // Encrypted SMTP password
+  fromEmail String? // From email address
+  fromName  String? // From name
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("email_settings")
+}
+
+model Backup {
+  id          String   @id @default(uuid())
+  type        String   // "database" or "minio"
+  fileName    String   // Name of the backup file
+  storageKey  String   // Storage key in MinIO
+  fileSize    BigInt   // Size in bytes
+  createdAt   DateTime @default(now())
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdById String
+
+  @@map("backups")
+}
+
+model TelegramVerification {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  code      String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  telegramId String? // Store numeric Telegram ID when username is used
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("telegram_verifications")
+}
+
+model Notification {
+  id      String           @id @default(uuid())
+  userId  String // User who should receive this notification
+  type    NotificationType
+  title   String
+  message String
+  read    Boolean          @default(false)
+
+  // Optional related entity IDs for linking
+  meetingId String?
+  caseId    String?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  meeting Meeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  case    Case?    @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+}

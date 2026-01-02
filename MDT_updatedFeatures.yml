@@ -1,0 +1,526 @@
+app:
+  name: MDT Register Digital System
+  stack:
+    frontend: NextJS 14 (App Router, Server Actions)
+    backend: NextJS API routes
+    orm: Prisma ORM
+    database: PostgreSQL
+    object_storage: MinIO (S3-compatible)
+    auth: NextAuth (Credentials Provider)
+    styling: TailwindCSS / shadcn-ui
+    pdf_generation: Server-side (PDFKit / Puppeteer)
+
+  roles:
+    - admin
+    - coordinator
+    - consultant
+    - viewer
+
+  role_management:
+    description: |
+      Admin can assign any user as a Coordinator.
+      Multiple Coordinators are allowed.
+      When Coordinator rights are revoked, the user returns to their previousRole
+      (consultant or viewer). Coordinator role grants full coordinator permissions
+      across the system.
+
+  permissions:
+    admin:
+      - manage_users
+      - manage_departments
+      - manage_meetings
+      - manage_all_cases
+      - view_all_cases
+      - edit_any_specialist_opinion
+      - generate_reports
+      - edit_radiology_findings
+      - edit_pathology_findings
+      - assign_or_revoke_coordinators
+
+    coordinator:
+      - manage_meetings
+      - manage_all_cases
+      - add_consensus_report
+      - edit_consensus_report
+      - edit_any_specialist_opinion
+      - edit_radiology_findings
+      - edit_pathology_findings
+      - generate_reports
+
+    consultant:
+      - add_cases
+      - edit_cases_in_own_department
+      - view_cases_in_own_department
+      - add_specialist_opinion
+      - edit_own_specialist_opinion
+      - edit_radiology_findings_if_radiology_department
+      - edit_pathology_findings_if_pathology_department
+      - resubmit_case
+
+    viewer:
+      - view_all_cases
+
+  department_rules:
+    radiology_editing:
+      description: |
+        Radiology department consultants may edit radiologyFindings,
+        including rich text and inline images.
+
+    pathology_editing:
+      description: |
+        Pathology department consultants may edit pathologyFindings,
+        including rich text and inline images.
+
+    specialists_opinion:
+      description: |
+        Consultants from other departments may add specialist opinions.
+        Each opinion is editable only by:
+          - author (consultant)
+          - coordinator
+          - admin
+
+database:
+  models:
+
+    User:
+      id: string (uuid)
+      name: string
+      loginId: string (unique)
+      passwordHash: string
+      role: enum(Admin, Coordinator, Consultant, Viewer)
+      previousRole: enum(Consultant, Viewer) optional
+      departmentId: string (nullable for admin/viewer)
+      createdAt: datetime
+      updatedAt: datetime
+
+    Department:
+      id: string (uuid)
+      name: string
+      createdAt: datetime
+      updatedAt: datetime
+
+    Meeting:
+      id: string (uuid)
+      date: date
+      description: string optional
+      createdBy: User
+      createdAt: datetime
+      updatedAt: datetime
+
+    Case:
+      id: string (uuid)
+      patientName: string
+      mrn: string optional
+      age: int
+      gender: enum(Male, Female, Other)
+      presentingDepartmentId: string
+
+      clinicalDetails: string
+
+      radiologyFindings:
+        type: richtext
+        format: JSON
+        description: |
+          Contains rich text and inline images.
+          Inline images are stored in MinIO and referenced by storageKey.
+
+      pathologyFindings:
+        type: richtext
+        format: JSON
+        description: |
+          Contains rich text and inline images.
+          Inline images are stored in MinIO and referenced by storageKey.
+
+      diagnosisStage: string
+      treatmentPlan: string
+      question: string
+
+      status: enum(DRAFT, SUBMITTED, PENDING, REVIEWED, RESUBMITTED, ARCHIVED)
+      createdById: string
+      assignedMeetingId: string optional
+      submittedAt: datetime optional
+      reviewedAt: datetime optional
+      archivedAt: datetime optional
+      createdAt: datetime
+      updatedAt: datetime
+
+    CaseAttachment:
+      id: string (uuid)
+      caseId: string
+      fileName: string
+      fileType: string
+      fileSize: number
+      storageKey: string
+      pdfStorageKey: string optional
+      conversionStatus: enum(PENDING, PROCESSING, READY, FAILED)
+      uploadedById: string
+      createdAt: datetime
+      convertedAt: datetime optional
+
+    SpecialistsOpinion:
+      id: string (uuid)
+      caseId: string
+      consultantId: string
+      departmentId: string
+      opinionText: string
+      createdAt: datetime
+      updatedAt: datetime
+      permissions:
+        editableBy:
+          - opinion_owner
+          - coordinator
+          - admin
+
+    ConsensusReport:
+      id: string (uuid)
+      caseId: string
+      finalDiagnosis: string
+      mdtConsensus: string
+      meetingDate: date
+      remarks: string optional
+      createdById: string
+      createdAt: datetime
+      updatedAt: datetime
+
+ui:
+  layout:
+    sidebar:
+      items:
+        - Dashboard
+        - Register
+        - Cases
+        - Meetings
+        - Settings (admin & coordinator only)
+
+  pages:
+    Case Details:
+      fields:
+        - patientName
+        - mrn
+        - age
+        - gender
+        - presentingDepartment
+        - clinicalDetails
+
+        - radiologyFindings:
+            type: richtext_with_inline_images
+            editable_by:
+              - radiology_consultants
+              - coordinator
+              - admin
+
+        - pathologyFindings:
+            type: richtext_with_inline_images
+            editable_by:
+              - pathology_consultants
+              - coordinator
+              - admin
+
+        - diagnosisStage
+        - treatmentPlan
+        - question
+        - specialistsOpinion (multiple entries)
+        - attachments
+        - history
+
+  actions:
+    send_alert:
+      label: Send Alert
+      visible_to_roles:
+        - admin
+        - coordinator
+      confirmation_required: true
+      confirmation_message: >
+        This will send a notification to the MDT Telegram channel.
+        Ensure no patient-identifiable information is included.
+      placement:
+        meeting_creation_page:
+          position: after_save
+        case_submission_page:
+          position: after_submit
+      state_rules:
+        disabled_when:
+          - case_status != SUBMITTED
+
+workflows:
+  radiology_pathology_inline_images:
+    - user edits radiologyFindings/pathologyFindings rich-text
+    - images added remain local (not uploaded yet)
+    - on clicking Save:
+        * upload new images to MinIO
+        * delete removed images from MinIO
+        * rewrite JSON structure with final storageKeys
+        * save JSON into the case record
+    - permissions:
+        radiologyFindings:
+          - radiology consultants
+          - coordinator
+          - admin
+        pathologyFindings:
+          - pathology consultants
+          - coordinator
+          - admin
+  
+  attachment_preview:
+    description: |
+      Controls how attachments are previewed in the browser while maintaining
+      privacy and access control.
+    behavior:
+      pdf:
+        action: open_in_new_tab
+        mode: inline_view
+      non_pdf:
+        action: open_converted_pdf
+        condition: conversion_status == READY
+    fallback:
+      on_conversion_pending:
+        message: "Preview is being prepared. Please try again shortly."
+      on_conversion_failed:
+        action: download_original
+    access_control:
+      preview_allowed_for:
+        - admin
+        - coordinator
+        - consultant
+        - viewer
+    delivery:
+      method: presigned_url
+      ttl_seconds: 60
+      cache_control: no-store
+
+  manual_notification_dispatch:
+    - coordinator_or_admin_performs_primary_action
+    - system_persists_action_successfully
+    - "Send Alert" button becomes available
+    - user_reviews_confirmation_dialog
+    - system_sends_telegram_notification
+    - system_logs_audit_event
+
+
+storage:
+  minio:
+    buckets:
+      - case-attachments
+    file_paths:
+      originals:
+        - cases/{caseId}/attachments/original/{uuid}.{ext}
+      previews:
+        - cases/{caseId}/attachments/pdf/{uuid}.pdf
+      inline_images:
+        radiology:
+          - cases/{caseId}/radiologyInline/{uuid}.png
+        pathology:
+          - cases/{caseId}/pathologyInline/{uuid}.png
+
+api:
+  coordinator_management:
+    - PATCH /api/users/:id/assign-coordinator
+      description: Assigns coordinator role to any user. Admin only.
+
+    - PATCH /api/users/:id/revoke-coordinator
+      description: Reverts user role to previousRole (consultant/viewer). Admin only.
+
+  radiology-pathology-inline-images:
+    - PATCH /api/cases/:id/radiology-findings
+      description: Saves radiologyFindings rich JSON. Requires coordinator, admin,
+                   or radiology consultant.
+
+    - PATCH /api/cases/:id/pathology-findings
+      description: Saves pathologyFindings rich JSON. Requires coordinator, admin,
+                   or pathology consultant.
+
+  notifications:
+    - POST /api/notifications/send-alert
+      description: Sends a manual Telegram alert for a supported context.
+      auth_required: true
+      allowed_roles:
+        - admin
+        - coordinator
+      request_body:
+        context: enum(meeting_created, case_submitted_to_mdt)
+        reference_id: string
+      behavior:
+        - validate_user_role
+        - validate_context
+        - generate_message_from_template
+        - send_to_telegram
+        - write_audit_log
+
+security:
+  inline_image_permissions:
+    radiology_findings:
+      - radiology consultants
+      - coordinator
+      - admin
+    pathology_findings:
+      - pathology consultants
+      - coordinator
+      - admin
+  
+  attachment_audit:
+    log_events:
+      - attachment_uploaded
+      - attachment_converted
+      - attachment_previewed
+      - attachment_downloaded
+    fields_logged:
+      - attachment_id
+      - user_id
+      - timestamp
+      - action
+    excludes:
+      - file_contents
+      - patient_identifiers
+
+  image_upload:
+    allowed_file_types: [png, jpg, jpeg]
+    upload_only_on_save: true
+
+  notification_audit:
+    description: |
+      Audit log for all manually triggered notifications.
+    log_fields:
+      - notification_id
+      - triggered_by_user_id
+      - triggered_by_role
+      - context
+      - reference_id
+      - timestamp
+    excludes:
+      - message_payload
+      - patient_identifiers
+
+pdfs:
+  template:
+    header: Hospital name + address
+
+    description: |
+      Consensus Report PDF will include only text content.
+      Inline images inside radiologyFindings or pathologyFindings
+      will NOT be rendered or downloaded.
+
+    sections:
+      - Patient Details
+      - Diagnosis
+      - Radiology Findings (text-only, images stripped)
+      - Pathology Findings (text-only, images stripped)
+      - Specialists' Opinions
+      - Discussion Question
+      - Consensus Report
+
+    formatting_rules:
+      radiologyFindings:
+        strip_inline_images: true
+        convert_richtext_to_plaintext: true
+
+      pathologyFindings:
+        strip_inline_images: true
+        convert_richtext_to_plaintext: true
+
+    footer:
+      signature_block_bottom_right: "MDT Coordinator Signature"
+
+
+notifications:
+  telegram:
+    name: Manual Telegram Alerts
+    description: |
+      Manually triggered notification system allowing Coordinators and Admins
+      to send operational alerts to a private Telegram channel or group.
+      Alerts are sent only via explicit user action and never automatically.
+    trigger_mode: manual_only
+    allowed_roles:
+      - admin
+      - coordinator
+    delivery:
+      provider: telegram
+      mode: broadcast
+      target: private_channel_or_group
+    configuration:
+      bot_token: environment_variable
+      chat_id: environment_variable
+    security:
+      channel_visibility: private
+      message_content_policy:
+        - no_patient_name
+        - no_mrn
+        - no_sensitive_clinical_data
+        - no_file_contents
+    supported_contexts:
+      - meeting_created
+      - case_submitted_to_mdt
+    reliability:
+      retries: 3
+      timeout_seconds: 10
+  message_templates:
+    meeting_created:
+      title: "📅 MDT Meeting Scheduled"
+      body:
+        - "Meeting Date: {{meeting_date}}"
+        - "Created by: {{created_by_role}}"
+        - "Please review assigned cases before the meeting."
+    case_submitted_to_mdt:
+      title: "📁 Case Submitted to MDT"
+      body:
+        - "Department: {{department_name}}"
+        - "Submitted by: {{submitted_by_role}}"
+        - "Status: Ready for MDT review"
+    constraints:
+      prohibited_fields:
+        - patient_name
+        - mrn
+        - age
+        - gender
+        - diagnosis
+
+document_conversion:
+  name: Attachment Background Conversion Service
+  description: |
+    Asynchronous document conversion service responsible for converting
+    Office documents to PDF for secure, in-browser preview.
+    All processing occurs within internal infrastructure.
+  execution:
+    mode: background_worker
+    isolation: containerized
+    runtime_user: non_root
+  engine:
+    name: libreoffice
+    mode: headless
+    supported_formats:
+      input:
+        - doc
+        - docx
+        - ppt
+        - pptx
+        - xls
+        - xlsx
+      output:
+        - pdf
+  workflow:
+    steps:
+      - download_original_from_minio
+      - convert_to_pdf_headless
+      - validate_pdf_output
+      - upload_pdf_to_minio
+      - update_attachment_metadata
+      - emit_notification_event
+  resource_limits:
+    max_file_size_mb: 50
+    execution_timeout_seconds: 120
+  failure_handling:
+    retries: 1
+    on_failure:
+      - mark_attachment_failed
+      - retain_original_file
+      - notify_administrators
+  cleanup:
+    temporary_files:
+      location: ephemeral_container_storage
+      delete_after_processing: true
+  security:
+    internet_access: disabled
+    persistent_local_storage: disabled
+    logs:
+      include_file_contents: false
+
+
