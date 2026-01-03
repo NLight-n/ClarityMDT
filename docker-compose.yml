@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17
     container_name: postgres
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
@@ -40,6 +40,25 @@ services:
       timeout: 20s
       retries: 3
       start_period: 40s
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@admin.com}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - app_network
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   app:
     build:
@@ -85,6 +104,8 @@ volumes:
   minio_data:
     driver: local
   app_data:
+    driver: local
+  pgadmin_data:
     driver: local
 
 networks:

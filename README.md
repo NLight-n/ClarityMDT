@@ -28,7 +28,7 @@ A comprehensive Multi-Disciplinary Team (MDT) case management system for healthc
 
 - **Frontend**: Next.js 15 (App Router), React 18, TypeScript
 - **Backend**: Next.js API Routes, Server Actions
-- **Database**: PostgreSQL 16
+- **Database**: PostgreSQL 17
 - **ORM**: Prisma
 - **Authentication**: NextAuth.js v5
 - **Object Storage**: MinIO (S3-compatible)
@@ -109,6 +109,7 @@ docker-compose up -d
 This will:
 - Start PostgreSQL database
 - Start MinIO object storage
+- Start pgAdmin4 (database administration tool)
 - Build and start the application
 - Run database migrations automatically
 
@@ -116,6 +117,7 @@ This will:
 
 - **Application**: http://localhost:3000 (or your configured PORT)
 - **MinIO Console**: http://localhost:9001 (default credentials from `.env`)
+- **pgAdmin4**: http://localhost:5050 (default: admin@admin.com / admin)
 
 ### 5. Initial Setup
 
@@ -151,13 +153,19 @@ All configuration is done through the `.env` file. Key variables:
 - `MINIO_BUCKET`: MinIO bucket name for file storage
 - `MINIO_SSL`: Enable SSL for MinIO (true/false)
 
+#### pgAdmin4 Configuration (Optional)
+- `PGADMIN_EMAIL`: pgAdmin login email (default: admin@admin.com)
+- `PGADMIN_PASSWORD`: pgAdmin login password (default: admin)
+- `PGADMIN_PORT`: pgAdmin web interface port (default: 5050)
+
 ### Docker Services
 
-The `docker-compose.yml` includes three services:
+The `docker-compose.yml` includes four services:
 
-1. **postgres**: PostgreSQL 16 database
+1. **postgres**: PostgreSQL 17 database
 2. **minio**: MinIO object storage server
-3. **app**: The MDT application (built from Dockerfile)
+3. **pgadmin**: pgAdmin4 web-based database administration tool
+4. **app**: The MDT application (built from Dockerfile)
 
 All services are connected via a Docker network and configured to restart automatically.
 
@@ -259,9 +267,24 @@ docker-compose up -d app
 ```
 
 ### Access Database
+
+**Via Command Line:**
 ```bash
 docker-compose exec postgres psql -U postgres -d mdtapp
 ```
+
+**Via pgAdmin4:**
+1. Access pgAdmin4 at http://localhost:5050
+2. Login with your credentials (default: admin@admin.com / admin)
+3. Right-click "Servers" → "Register" → "Server"
+4. In the "General" tab, enter a name (e.g., "MDT Database")
+5. In the "Connection" tab, enter:
+   - **Host**: `postgres` (Docker service name)
+   - **Port**: `5432`
+   - **Database**: `mdtapp` (or your `POSTGRES_DB` value)
+   - **Username**: `postgres` (or your `POSTGRES_USER` value)
+   - **Password**: `postgres` (or your `POSTGRES_PASSWORD` value)
+6. Click "Save"
 
 ### Access Application Container
 ```bash
