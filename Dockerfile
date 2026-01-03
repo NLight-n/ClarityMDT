@@ -16,6 +16,14 @@ WORKDIR /app
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
+
+# Copy Prisma schema files first (needed for generate)
+COPY prisma ./prisma
+
+# Generate Prisma Client (needs schema files)
+RUN npx prisma generate
+
+# Copy the rest of the application files
 COPY . .
 
 # Build the application
