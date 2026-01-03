@@ -257,7 +257,7 @@ export function TelegramSettings() {
                   disabled={saving}
                 />
                 <p className="text-xs text-muted-foreground">
-                  The Telegram bot username (e.g., "mybot" for @mybot)
+                  The Telegram bot username (e.g., &quot;mybot&quot; for @mybot)
                 </p>
               </div>
 

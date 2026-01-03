@@ -196,7 +196,7 @@ export function AttachmentManager({
   };
 
   // Reset staged changes when edit mode is cancelled
-  const prevIsEditingRef = useRef<boolean | undefined>();
+  const prevIsEditingRef = useRef<boolean | null | undefined>();
   useEffect(() => {
     // Only reset when transitioning from editing to not editing
     if (prevIsEditingRef.current === true && !isEditing && externalIsEditing !== undefined) {

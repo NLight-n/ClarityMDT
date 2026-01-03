@@ -356,12 +356,14 @@ function CaseDetailPageContent() {
             showUpToPatientInfo={true}
             isEditing={isEditing}
             setIsEditing={setIsEditing}
-            onSave={() => {
+            onSave={async (data) => {
               // Use parent's caseFormData which should have all the latest changes
               if (caseFormData) {
-                handleUnifiedSave(caseFormData);
+                await handleUnifiedSave(caseFormData);
+              } else if (data) {
+                await handleUnifiedSave(data);
               } else {
-                handleUnifiedSave();
+                await handleUnifiedSave();
               }
             }}
             saving={saving}

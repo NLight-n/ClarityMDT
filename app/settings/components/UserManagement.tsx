@@ -620,12 +620,12 @@ export function UserManagement() {
                   }
                   required={!editingUser}
                   minLength={6}
-                  disabled={
+                  disabled={Boolean(
                     editingUser && (
                       (editingUser.role === Role.Admin && !isUserAdmin) ||
                       (editingUser.id === user?.id)
                     )
-                  }
+                  )}
                 />
                 {editingUser && editingUser.role === Role.Admin && !isUserAdmin && (
                   <p className="text-xs text-muted-foreground">

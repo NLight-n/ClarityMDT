@@ -269,9 +269,12 @@ export function Backup() {
 
   const formatFileSize = (bytes: string): string => {
     const size = BigInt(bytes);
-    if (size < 1024n) return `${size} B`;
-    if (size < 1024n * 1024n) return `${Number(size) / 1024} KB`;
-    if (size < 1024n * 1024n * 1024n) return `${Number(size) / (1024 * 1024)} MB`;
+    const kb = BigInt(1024);
+    const mb = BigInt(1024 * 1024);
+    const gb = BigInt(1024 * 1024 * 1024);
+    if (size < kb) return `${size} B`;
+    if (size < mb) return `${Number(size) / 1024} KB`;
+    if (size < gb) return `${Number(size) / (1024 * 1024)} MB`;
     return `${Number(size) / (1024 * 1024 * 1024)} GB`;
   };
 

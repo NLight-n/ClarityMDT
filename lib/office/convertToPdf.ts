@@ -95,18 +95,22 @@ export async function convertToPdf(
     console.log("Input file:", inputFilePath);
     console.log("Output directory:", outputDir);
     
-    const { stdout, stderr } = await execAsync(command, {
+    const execOptions: any = {
       timeout: 60000, // 60 second timeout
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      shell: osPlatform === "win32", // Use shell on Windows for better path handling
-    });
+    };
+    if (osPlatform === "win32") {
+      execOptions.shell = true; // Use shell on Windows for better path handling
+    }
+    const { stdout, stderr } = await execAsync(command, execOptions);
 
     console.log("LibreOffice stdout:", stdout);
     if (stderr) {
-      console.log("LibreOffice stderr:", stderr);
+      const stderrStr = typeof stderr === 'string' ? stderr : stderr.toString();
+      console.log("LibreOffice stderr:", stderrStr);
       // Check if there's an actual error (not just INFO messages)
-      if (!stderr.includes("INFO") && !stderr.includes("convert") && stderr.trim().length > 0) {
-        console.warn("LibreOffice may have encountered an error:", stderr);
+      if (!stderrStr.includes("INFO") && !stderrStr.includes("convert") && stderrStr.trim().length > 0) {
+        console.warn("LibreOffice may have encountered an error:", stderrStr);
       }
     }
 
@@ -194,10 +198,11 @@ export async function isLibreOfficeAvailable(): Promise<boolean> {
   try {
     const libreOfficeCmd = getLibreOfficeCommand();
     const osPlatform = platform();
-    await execAsync(`${libreOfficeCmd} --version`, { 
-      timeout: 5000,
-      shell: osPlatform === "win32",
-    });
+    const checkOptions: any = { timeout: 5000 };
+    if (osPlatform === "win32") {
+      checkOptions.shell = true;
+    }
+    await execAsync(`${libreOfficeCmd} --version`, checkOptions);
     return true;
   } catch {
     return false;

@@ -765,7 +765,7 @@ export function NotificationSettings() {
         ) : notifications.length === 0 ? (
           <div className="text-center p-12 text-muted-foreground">
             <p>No notifications yet</p>
-            <p className="text-sm mt-2">You'll see notifications here when events occur</p>
+            <p className="text-sm mt-2">You&apos;ll see notifications here when events occur</p>
           </div>
         ) : (
           <div className="space-y-2">

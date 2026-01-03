@@ -6,23 +6,6 @@ import { sendTelegramMessage } from "@/lib/telegram/sendMessage";
  * POST /api/telegram/webhook - Telegram bot webhook endpoint
  * Receives updates from Telegram and links user's Telegram ID using verification codes
  */
-
-  try {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-      }),
-    });
-  } catch (error) {
-    console.error("Error sending Telegram message:", error);
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     // Verify webhook secret if configured
@@ -56,10 +39,10 @@ export async function POST(request: NextRequest) {
 
         if (!verification) {
           // Code not found - send error message
-          await sendTelegramMessage(
-            telegramId,
-            "❌ Invalid verification code. Please check the code and try again."
-          );
+          await sendTelegramMessage({
+            chatId: telegramId,
+            text: "❌ Invalid verification code. Please check the code and try again.",
+          });
           return NextResponse.json({ ok: true });
         }
 
@@ -70,10 +53,10 @@ export async function POST(request: NextRequest) {
             where: { id: verification.id },
           });
           
-          await sendTelegramMessage(
-            telegramId,
-            "❌ Verification code has expired. Please generate a new code from the MDT App."
-          );
+          await sendTelegramMessage({
+            chatId: telegramId,
+            text: "❌ Verification code has expired. Please generate a new code from the MDT App.",
+          });
           return NextResponse.json({ ok: true });
         }
 
@@ -86,10 +69,10 @@ export async function POST(request: NextRequest) {
         });
 
         if (existingUser) {
-          await sendTelegramMessage(
-            telegramId,
-            "❌ This Telegram account is already linked to another user."
-          );
+          await sendTelegramMessage({
+            chatId: telegramId,
+            text: "❌ This Telegram account is already linked to another user.",
+          });
           return NextResponse.json({ ok: true });
         }
 
@@ -105,28 +88,28 @@ export async function POST(request: NextRequest) {
         });
 
         // Send success message
-        await sendTelegramMessage(
-          telegramId,
-          `✅ Successfully linked! Your Telegram account is now connected to ${verification.user.name}.\n\nYou will now receive notifications from the MDT App.`
-        );
+        await sendTelegramMessage({
+          chatId: telegramId,
+          text: `✅ Successfully linked! Your Telegram account is now connected to ${verification.user.name}.\n\nYou will now receive notifications from the MDT App.`,
+        });
         
         return NextResponse.json({ ok: true });
       }
 
       // If user sends /start or /help, provide instructions
       if (text === "/START" || text === "/HELP" || text.startsWith("/")) {
-        await sendTelegramMessage(
-          telegramId,
-          "👋 Hello! To link your Telegram account to MDT App:\n\n1. Go to your profile in the MDT App\n2. Click 'Link Telegram Account'\n3. Copy the verification code shown\n4. Send that code to this bot\n\nYour code will be valid for 10 minutes."
-        );
+        await sendTelegramMessage({
+          chatId: telegramId,
+          text: "👋 Hello! To link your Telegram account to MDT App:\n\n1. Go to your profile in the MDT App\n2. Click 'Link Telegram Account'\n3. Copy the verification code shown\n4. Send that code to this bot\n\nYour code will be valid for 10 minutes.",
+        });
         return NextResponse.json({ ok: true });
       }
 
       // If message doesn't match a code, provide instructions
-      await sendTelegramMessage(
-        telegramId,
-        "📝 Please send your 8-character verification code to link your account.\n\nTo get a code:\n1. Open the MDT App\n2. Go to your Profile\n3. Click 'Link Telegram Account'"
-      );
+      await sendTelegramMessage({
+        chatId: telegramId,
+        text: "📝 Please send your 8-character verification code to link your account.\n\nTo get a code:\n1. Open the MDT App\n2. Go to your Profile\n3. Click 'Link Telegram Account'",
+      });
       return NextResponse.json({ ok: true });
     }
 

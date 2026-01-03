@@ -105,8 +105,10 @@ export async function PATCH(request: NextRequest) {
           const mimeMatch = qrCodeImage.match(/data:image\/(\w+);base64/);
           const extension = mimeMatch ? mimeMatch[1] : "png";
           
-          const fileName = `telegram-qr-${Date.now()}.${extension}`;
-          const storageKey = await uploadFile(buffer, fileName, `image/${extension}`);
+          const storageKey = `telegram/qr-${Date.now()}.${extension}`;
+          await uploadFile(buffer, storageKey, {
+            contentType: `image/${extension}`,
+          });
           
           updateData.qrCodeUrl = storageKey;
         } catch (uploadError) {

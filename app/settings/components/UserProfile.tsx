@@ -894,7 +894,7 @@ export function UserProfile() {
                             variant="outline"
                             size="sm"
                             onClick={handleGenerateTelegramCode}
-                            disabled={generatingCode || telegramEnabled === false}
+                            disabled={generatingCode || !telegramEnabled}
                             className="w-full"
                           >
                             {generatingCode ? (
@@ -952,7 +952,7 @@ export function UserProfile() {
                                 setManualLinking(false);
                               }
                             }}
-                            disabled={telegramEnabled === false}
+                            disabled={!telegramEnabled}
                             className="w-full"
                           >
                             <MessageSquare className="mr-2 h-4 w-4" />
@@ -989,16 +989,16 @@ export function UserProfile() {
                                   <p className="text-xs font-medium text-foreground">Option 1: Search for Bot</p>
                                   <p className="text-xs text-muted-foreground">
                                     {manualBotUsername ? (
-                                      <>Search for <strong>@{manualBotUsername}</strong> on Telegram and click "Start".</>
+                                      <>Search for <strong>@{manualBotUsername}</strong> on Telegram and click &quot;Start&quot;.</>
                                     ) : (
-                                      <>Search for the bot on Telegram and click "Start".</>
+                                      <>Search for the bot on Telegram and click &quot;Start&quot;.</>
                                     )}
                                   </p>
                                 </div>
                                 <div className="space-y-2">
                                   <p className="text-xs font-medium text-foreground">Option 2: Scan QR Code</p>
                                   <p className="text-xs text-muted-foreground">
-                                    Open Telegram → Click New chat → New contact → Add via QR code → Scan this QR code → Click Message → Press "Start" button
+                                    Open Telegram → Click New chat → New contact → Add via QR code → Scan this QR code → Click Message → Press &quot;Start&quot; button
                                   </p>
                                 </div>
                               </div>
@@ -1285,7 +1285,7 @@ export function UserProfile() {
                 Reset
               </Button>
               <Button
-                onClick={handleSave}
+                onClick={() => handleSave()}
                 disabled={saving}
                 className="flex-1"
               >
@@ -1343,10 +1343,6 @@ export function UserProfile() {
       }}
     >
       <AlertDialogContent 
-        onInteractOutside={(e) => {
-          // Prevent closing by clicking outside
-          e.preventDefault();
-        }}
         onEscapeKeyDown={(e) => {
           // Prevent closing with ESC key
           e.preventDefault();
