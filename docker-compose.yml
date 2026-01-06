@@ -67,7 +67,7 @@ services:
     container_name: mdtapp
     environment:
       - NODE_ENV=production
-      - PORT=${PORT}
+      - PORT=3000
       - DATABASE_URL=${DATABASE_URL}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
       # NEXTAUTH_URL is optional - NextAuth uses trustHost: true to auto-detect URL

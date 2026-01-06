@@ -85,8 +85,7 @@ EXPOSE 3000
 # This is required for Docker networking (container must accept connections from outside)
 ENV HOSTNAME="0.0.0.0"
 
-# PORT default value (will be overridden by docker-compose.yml from .env file)
-# This is the container's internal port - actual host port is mapped in docker-compose.yml
+# PORT is always 3000 inside the container (host port is configurable via .env in docker-compose.yml)
 ENV PORT=3000
 
 CMD ["node", "server.js"]
