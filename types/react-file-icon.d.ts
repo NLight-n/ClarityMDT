@@ -19,3 +19,4 @@ declare module 'react-file-icon' {
   export const defaultStyles: Record<string, any>;
 }
 
+
