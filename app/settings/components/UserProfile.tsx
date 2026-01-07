@@ -919,7 +919,17 @@ export function UserProfile() {
                                 if (response.ok) {
                                   const data = await response.json();
                                   setManualBotUsername(data.botUsername || "");
-                                  setQrCodeUrl(data.qrCodeUrl || null);
+                                  // Use streaming endpoint if qrCodeUrl is provided
+                                  if (data.qrCodeUrl) {
+                                    // If it's already a full URL (streaming endpoint), use it directly
+                                    // Otherwise, it's a storage key, so convert to streaming endpoint
+                                    const qrUrl = data.qrCodeUrl.startsWith('http') 
+                                      ? data.qrCodeUrl 
+                                      : `/api/images/stream/${data.qrCodeUrl}`;
+                                    setQrCodeUrl(qrUrl);
+                                  } else {
+                                    setQrCodeUrl(null);
+                                  }
                                   
                                   // Check if Telegram is actually enabled
                                   if (!data.botUsername) {

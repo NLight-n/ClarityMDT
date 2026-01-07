@@ -50,7 +50,10 @@ function LoginForm() {
         setError("Login failed. Please try again.");
       }
     }
+  }, [searchParams]);
 
+  // Load hospital settings separately
+  useEffect(() => {
     // Load hospital settings
     const loadHospitalSettings = async () => {
       try {
@@ -96,7 +99,7 @@ function LoginForm() {
       }
     };
     loadHospitalSettings();
-  }, [searchParams]);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
