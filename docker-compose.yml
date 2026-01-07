@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - app_network
+      - clarityapp_network
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
@@ -54,7 +54,7 @@ services:
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
-      - app_network
+      - clarityapp_network
     restart: unless-stopped
     depends_on:
       postgres:
@@ -64,7 +64,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mdtapp
+    container_name: clarityapp
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -84,7 +84,7 @@ services:
     volumes:
       - app_data:/app/.next
     networks:
-      - app_network
+      - clarityapp_network
     restart: unless-stopped
     depends_on:
       postgres:
@@ -109,5 +109,5 @@ volumes:
     driver: local
 
 networks:
-  app_network:
+  clarityapp_network:
     driver: bridge
