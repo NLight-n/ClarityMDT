@@ -14,6 +14,9 @@ FROM node:20-slim AS builder
 
 WORKDIR /app
 
+# Cache bust argument - change this to force rebuild
+ARG CACHE_BUST=1
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 
@@ -25,6 +28,9 @@ RUN npx prisma generate
 
 # Copy the rest of the application files
 COPY . .
+
+# Force rebuild by echoing cache bust value
+RUN echo "Cache bust: ${CACHE_BUST}"
 
 # Build the application
 RUN npm run build

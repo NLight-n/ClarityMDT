@@ -41,6 +41,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       botUsername: settings.botName,
       qrCodeUrl: qrCodePreviewUrl,
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+      },
     });
   } catch (error) {
     console.error("Error fetching Telegram bot info:", error);

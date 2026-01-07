@@ -31,7 +31,7 @@ services:
     volumes:
       - minio_data:/data
     networks:
-      - app_network
+      - clarityapp_network
     restart: unless-stopped
     command: server /data --console-address ":9001"
     healthcheck:
@@ -81,8 +81,7 @@ services:
       - MINIO_SSL=${MINIO_SSL}
     ports:
       - "${PORT}:3000"  # Map host port to container port 3000
-    volumes:
-      - app_data:/app/.next
+    # Note: Don't mount volumes to /app/.next - it would override the built code
     networks:
       - clarityapp_network
     restart: unless-stopped
@@ -102,8 +101,6 @@ volumes:
   postgres_data:
     driver: local
   minio_data:
-    driver: local
-  app_data:
     driver: local
   pgadmin_data:
     driver: local
