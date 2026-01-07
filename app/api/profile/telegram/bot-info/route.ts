@@ -33,9 +33,8 @@ export async function GET(request: NextRequest) {
         // User will need to re-upload the QR code
         qrCodePreviewUrl = null;
       } else {
-        // It's a storage key - use streaming endpoint
-        const baseUrl = request.nextUrl.origin;
-        qrCodePreviewUrl = `${baseUrl}/api/images/stream/${settings.qrCodeUrl}`;
+        // It's a storage key - return relative path (frontend will construct full URL)
+        qrCodePreviewUrl = `/api/images/stream/${settings.qrCodeUrl}`;
       }
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getMinioClient, getDefaultBucket } from "@/lib/minio";
+import { getMinioClient, getDefaultBucket, ensureBucket } from "@/lib/minio";
 
 /**
  * GET /api/images/stream/[...path] - Stream an image from MinIO for display
@@ -23,6 +23,9 @@ export async function GET(
 
     const client = getMinioClient();
     const bucket = getDefaultBucket();
+
+    // Ensure bucket exists
+    await ensureBucket(bucket);
 
     // Get the file from MinIO
     try {
@@ -65,6 +68,12 @@ export async function GET(
         return NextResponse.json(
           { error: "Image not found in storage" },
           { status: 404 }
+        );
+      }
+      if (minioError.code === "NoSuchBucket") {
+        return NextResponse.json(
+          { error: "Storage bucket not found. Please check MinIO configuration." },
+          { status: 500 }
         );
       }
       throw minioError;

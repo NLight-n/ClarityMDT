@@ -1,4 +1,4 @@
-import { getMinioClient, getDefaultBucket } from "./client";
+import { getMinioClient, getDefaultBucket, ensureBucket } from "./client";
 
 /**
  * Delete a file from MinIO
@@ -12,6 +12,9 @@ export async function deleteFile(
 ): Promise<void> {
   const client = getMinioClient();
   const bucketName = bucket || getDefaultBucket();
+
+  // Ensure bucket exists before deleting
+  await ensureBucket(bucketName);
 
   await client.removeObject(bucketName, storageKey);
 }
@@ -32,6 +35,9 @@ export async function deleteFiles(
   if (storageKeys.length === 0) {
     return;
   }
+
+  // Ensure bucket exists before deleting
+  await ensureBucket(bucketName);
 
   await client.removeObjects(bucketName, storageKeys);
 }

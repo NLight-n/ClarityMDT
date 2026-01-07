@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canViewCase } from "@/lib/permissions/accessControl";
 import { prisma } from "@/lib/prisma";
-import { getMinioClient, getDefaultBucket } from "@/lib/minio";
+import { getMinioClient, getDefaultBucket, ensureBucket } from "@/lib/minio";
 import { convertToPdf } from "@/lib/office/convertToPdf";
 import { uploadFile } from "@/lib/minio/upload";
 
@@ -55,6 +55,9 @@ export async function GET(
     const client = getMinioClient();
     const bucket = getDefaultBucket();
 
+    // Ensure bucket exists
+    await ensureBucket(bucket);
+
     // Check if it's an Office file that needs conversion
     const isWord = attachment.fileType === "application/msword" || 
                    attachment.fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -91,16 +94,27 @@ export async function GET(
           const fileBuffer = Buffer.concat(chunks);
 
           // Convert to PDF
-          const pdfBuffer = await convertToPdf(fileBuffer, attachment.fileName);
+          try {
+            const pdfBuffer = await convertToPdf(fileBuffer, attachment.fileName);
 
-          // Upload PDF to MinIO cache
-          await uploadFile(pdfBuffer, pdfStorageKey, {
-            contentType: "application/pdf",
-          });
+            // Upload PDF to MinIO cache
+            await uploadFile(pdfBuffer, pdfStorageKey, {
+              contentType: "application/pdf",
+            });
 
-          storageKey = pdfStorageKey;
-          contentType = "application/pdf";
-          fileName = attachment.fileName.replace(/\.[^/.]+$/, "") + ".pdf";
+            storageKey = pdfStorageKey;
+            contentType = "application/pdf";
+            fileName = attachment.fileName.replace(/\.[^/.]+$/, "") + ".pdf";
+          } catch (conversionError: any) {
+            console.error("Error converting Office file to PDF:", conversionError);
+            return NextResponse.json(
+              { 
+                error: "Failed to convert Office file to PDF",
+                details: conversionError.message || "Conversion failed. Please ensure LibreOffice is installed and accessible."
+              },
+              { status: 500 }
+            );
+          }
         } else {
           throw error;
         }

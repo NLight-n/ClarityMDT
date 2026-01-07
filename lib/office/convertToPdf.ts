@@ -43,6 +43,7 @@ function getLibreOfficeCommand(): string {
   }
   
   // Linux/macOS - use libreoffice command
+  // In Docker containers, libreoffice package provides the 'libreoffice' command
   return "libreoffice";
 }
 
@@ -88,7 +89,9 @@ export async function convertToPdf(
       const escapedOutputPath = outputDir.replace(/"/g, '\\"');
       command = `${libreOfficeCmd} --headless --convert-to pdf --outdir "${escapedOutputPath}" "${escapedInputPath}"`;
     } else {
-      command = `${libreOfficeCmd} --headless --convert-to pdf --outdir "${outputDir}" "${inputFilePath}"`;
+      // Linux/Docker: Add --nodefault to prevent user installation issues
+      // Set HOME environment variable is handled by Dockerfile
+      command = `${libreOfficeCmd} --headless --nodefault --nolockcheck --convert-to pdf --outdir "${outputDir}" "${inputFilePath}"`;
     }
     
     console.log("Running LibreOffice conversion command:", command);
@@ -202,10 +205,54 @@ export async function isLibreOfficeAvailable(): Promise<boolean> {
     if (osPlatform === "win32") {
       checkOptions.shell = true;
     }
-    await execAsync(`${libreOfficeCmd} --version`, checkOptions);
-    return true;
-  } catch {
+    const { stdout, stderr } = await execAsync(`${libreOfficeCmd} --version`, checkOptions);
+    // Check if we got a version output
+    const stdoutStr = typeof stdout === 'string' ? stdout : stdout?.toString() || '';
+    if (stdoutStr.trim().length > 0) {
+      console.log("LibreOffice version:", stdoutStr.trim());
+      return true;
+    }
     return false;
+  } catch (error: any) {
+    console.error("LibreOffice check failed:", error.message);
+    return false;
+  }
+}
+
+/**
+ * Get LibreOffice version and command path for debugging
+ * @returns Object with version info and command used
+ */
+export async function getLibreOfficeInfo(): Promise<{
+  available: boolean;
+  command: string;
+  version?: string;
+  platform: string;
+  error?: string;
+}> {
+  const osPlatform = platform();
+  const command = getLibreOfficeCommand();
+  
+  try {
+    const checkOptions: any = { timeout: 5000 };
+    if (osPlatform === "win32") {
+      checkOptions.shell = true;
+    }
+    const { stdout, stderr } = await execAsync(`${command} --version`, checkOptions);
+    const stdoutStr = typeof stdout === 'string' ? stdout : stdout?.toString() || '';
+    return {
+      available: true,
+      command,
+      version: stdoutStr.trim() || "Unknown",
+      platform: osPlatform,
+    };
+  } catch (error: any) {
+    return {
+      available: false,
+      command,
+      platform: osPlatform,
+      error: error.message || "Unknown error",
+    };
   }
 }
 

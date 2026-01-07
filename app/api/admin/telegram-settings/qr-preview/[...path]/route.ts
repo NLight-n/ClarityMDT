@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { isAdmin } from "@/lib/permissions/accessControl";
-import { getMinioClient, getDefaultBucket } from "@/lib/minio";
+import { getMinioClient, getDefaultBucket, ensureBucket } from "@/lib/minio";
 
 /**
  * GET /api/admin/telegram-settings/qr-preview/[...path] - Stream QR code image (Admin only)
@@ -29,6 +29,9 @@ export async function GET(
 
     const client = getMinioClient();
     const bucket = getDefaultBucket();
+
+    // Ensure bucket exists
+    await ensureBucket(bucket);
 
     try {
       // Get the file from MinIO
@@ -71,6 +74,12 @@ export async function GET(
         return NextResponse.json(
           { error: "QR code image not found in storage" },
           { status: 404 }
+        );
+      }
+      if (minioError.code === "NoSuchBucket") {
+        return NextResponse.json(
+          { error: "Storage bucket not found. Please check MinIO configuration." },
+          { status: 500 }
         );
       }
       throw minioError;

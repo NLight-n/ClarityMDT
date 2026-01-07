@@ -67,6 +67,11 @@ RUN apt-get update && \
 # Create a non-root user
 RUN groupadd -r nodejs && useradd -r -g nodejs nodejs
 
+# Create LibreOffice home directory with proper permissions
+# LibreOffice needs a writable directory for user installation
+RUN mkdir -p /tmp/libreoffice-home && \
+    chown -R nodejs:nodejs /tmp/libreoffice-home
+
 # Copy necessary files from standalone build
 # Next.js standalone output includes everything needed in .next/standalone
 COPY --from=builder /app/.next/standalone ./
@@ -87,6 +92,14 @@ ENV HOSTNAME="0.0.0.0"
 
 # PORT is always 3000 inside the container (host port is configurable via .env in docker-compose.yml)
 ENV PORT=3000
+
+# Suppress dconf warnings from LibreOffice (harmless but noisy in logs)
+# This prevents permission denied warnings when LibreOffice tries to create cache directories
+ENV DCONF_PROFILE=""
+
+# Set LibreOffice home directory to a writable location
+# This prevents "User installation could not be completed" errors
+ENV HOME="/tmp/libreoffice-home"
 
 CMD ["node", "server.js"]
 

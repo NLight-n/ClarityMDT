@@ -56,9 +56,22 @@ export function FileViewerModal({
       
       // Fetch the file stream
       fetch(`/api/attachments/stream/${attachmentId}`)
-        .then((response) => {
+        .then(async (response) => {
           if (!response.ok) {
-            throw new Error(`Failed to load file: ${response.statusText}`);
+            // Try to get error details from response
+            let errorMessage = response.statusText;
+            try {
+              const errorData = await response.json();
+              if (errorData.error) {
+                errorMessage = errorData.error;
+                if (errorData.details) {
+                  errorMessage += `: ${errorData.details}`;
+                }
+              }
+            } catch {
+              // If JSON parsing fails, use status text
+            }
+            throw new Error(`Failed to load file: ${errorMessage}`);
           }
           return response.blob();
         })
@@ -132,7 +145,13 @@ export function FileViewerModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl w-full h-[90vh] p-0 flex flex-col">
+      <DialogContent 
+        className="max-w-6xl w-full h-[90vh] p-0 flex flex-col"
+        aria-describedby="file-viewer-description"
+      >
+        <span id="file-viewer-description" className="sr-only">
+          File viewer for {fileName}
+        </span>
         <DialogHeader className="px-6 py-4 border-b flex-shrink-0 pr-12">
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="text-lg font-semibold truncate flex-1 min-w-0">
