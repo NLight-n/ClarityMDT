@@ -1,5 +1,17 @@
 # LibreOffice Verification in Docker
 
+## Fonts Installed
+
+The Docker container includes Microsoft-compatible fonts for proper PDF conversion:
+
+- **fonts-liberation / fonts-liberation2**: Free fonts metric-compatible with Arial, Times New Roman, Courier New
+- **fonts-dejavu**: High-quality fonts compatible with many document fonts
+- **fonts-freefont-ttf**: Free alternatives to common fonts
+- **fonts-noto / fonts-noto-core**: Google Noto fonts for international character support
+- **fontconfig**: Font configuration library
+
+These fonts ensure that Office documents convert to PDF with proper formatting and size.
+
 ## Important: Docker Platform Detection
 
 **When using Docker Desktop on Windows:**

@@ -36,9 +36,10 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install LibreOffice, PostgreSQL 17 client tools, and OpenSSL for Prisma
+# Install LibreOffice, PostgreSQL 17 client tools, OpenSSL for Prisma, and fonts
 # OpenSSL is required for Prisma engine detection in Docker environments
 # PostgreSQL 17 client requires the official PostgreSQL APT repository
+# Fonts are required for proper PDF conversion (Microsoft-compatible fonts)
 RUN apt-get update && \
     apt-get install -y \
     wget \
@@ -58,7 +59,19 @@ RUN apt-get update && \
     libreoffice-impress \
     postgresql-client-17 \
     openssl \
+    # Microsoft-compatible fonts for proper PDF conversion
+    fonts-liberation \
+    fonts-liberation2 \
+    fonts-dejavu \
+    fonts-dejavu-core \
+    fonts-dejavu-extra \
+    fonts-freefont-ttf \
+    fonts-noto \
+    fonts-noto-core \
+    fontconfig \
     --no-install-recommends && \
+    # Update font cache
+    fc-cache -f -v && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* \
     /etc/apt/sources.list.d/pgdg.list \

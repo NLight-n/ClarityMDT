@@ -89,9 +89,12 @@ export async function convertToPdf(
       const escapedOutputPath = outputDir.replace(/"/g, '\\"');
       command = `${libreOfficeCmd} --headless --convert-to pdf --outdir "${escapedOutputPath}" "${escapedInputPath}"`;
     } else {
-      // Linux/Docker: Add --nodefault to prevent user installation issues
-      // Set HOME environment variable is handled by Dockerfile
-      command = `${libreOfficeCmd} --headless --nodefault --nolockcheck --convert-to pdf --outdir "${outputDir}" "${inputFilePath}"`;
+      // Linux/Docker: Add options for better PDF conversion
+      // --nodefault: Prevent user installation issues
+      // --nolockcheck: Skip lock file check
+      // --nofirststartwizard: Skip first start wizard
+      // --norestore: Don't restore previous sessions
+      command = `${libreOfficeCmd} --headless --nodefault --nolockcheck --nofirststartwizard --norestore --convert-to pdf --outdir "${outputDir}" "${inputFilePath}"`;
     }
     
     console.log("Running LibreOffice conversion command:", command);
@@ -101,6 +104,15 @@ export async function convertToPdf(
     const execOptions: any = {
       timeout: 60000, // 60 second timeout
       maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      env: {
+        ...process.env,
+        // Ensure proper font configuration
+        FONTCONFIG_PATH: '/etc/fonts',
+        // Use a writable home directory for LibreOffice
+        HOME: process.env.HOME || '/tmp/libreoffice-home',
+        // Suppress dconf warnings
+        DCONF_PROFILE: '',
+      },
     };
     if (osPlatform === "win32") {
       execOptions.shell = true; // Use shell on Windows for better path handling

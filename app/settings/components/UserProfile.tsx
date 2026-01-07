@@ -919,21 +919,21 @@ export function UserProfile() {
                                 if (response.ok) {
                                   const data = await response.json();
                                   setManualBotUsername(data.botUsername || "");
-                                  // Use streaming endpoint if qrCodeUrl is provided
+                                  // Use QR preview endpoint if qrCodeUrl is provided
                                   if (data.qrCodeUrl) {
-                                    // Check if it's a presigned URL (old data) or streaming endpoint
+                                    // Check if it's a presigned URL (old data) or API endpoint
                                     if (data.qrCodeUrl.includes('minio:9000') || data.qrCodeUrl.includes('X-Amz-')) {
                                       // It's a presigned URL - can't use it, user needs to re-upload QR code
                                       setQrCodeUrl(null);
                                     } else if (data.qrCodeUrl.startsWith('/api/')) {
-                                      // It's already a relative streaming endpoint URL (from bot-info API)
+                                      // It's already a relative API endpoint URL (from bot-info API)
                                       setQrCodeUrl(data.qrCodeUrl);
                                     } else if (data.qrCodeUrl.startsWith('http') && data.qrCodeUrl.includes('/api/')) {
-                                      // It's a full streaming endpoint URL
+                                      // It's a full API endpoint URL
                                       setQrCodeUrl(data.qrCodeUrl);
                                     } else {
-                                      // It's a storage key - use streaming endpoint
-                                      setQrCodeUrl(`/api/images/stream/${data.qrCodeUrl}`);
+                                      // It's a storage key - use the QR preview endpoint
+                                      setQrCodeUrl(`/api/profile/telegram/qr-preview/${data.qrCodeUrl}`);
                                     }
                                   } else {
                                     setQrCodeUrl(null);
