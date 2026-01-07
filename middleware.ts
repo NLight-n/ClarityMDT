@@ -6,11 +6,13 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow access to login page, setup page, and API auth routes
+  // Also allow public API routes that don't require authentication
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/setup") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/setup") ||
+    pathname.startsWith("/api/hospital-settings") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico")
   ) {
@@ -76,6 +78,7 @@ export const config = {
      * Match all request paths except for the ones starting with:
      * - api/auth (NextAuth routes)
      * - api/setup (Setup routes)
+     * - api/hospital-settings (Public hospital settings endpoint)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
@@ -84,7 +87,7 @@ export const config = {
      * 
      * This includes root path "/" and all dashboard routes
      */
-    "/((?!api/auth|api/setup|_next/static|_next/image|favicon.ico|login|setup).*)",
+    "/((?!api/auth|api/setup|api/hospital-settings|_next/static|_next/image|favicon.ico|login|setup).*)",
     "/", // Explicitly include root path
   ],
 };

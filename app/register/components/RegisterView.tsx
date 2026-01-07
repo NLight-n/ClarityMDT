@@ -33,7 +33,7 @@ interface RegisterViewProps {
   currentMeetingId?: string;
 }
 
-const CASES_PER_PAGE_DESKTOP = 6; // 3 on left, 3 on right
+const CASES_PER_PAGE_DESKTOP = 6; // 3 on left, 3 on right (fixed for all desktop resolutions)
 const CASES_PER_PAGE_MOBILE = 3; // 3 on single page
 
 export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewProps) {
@@ -64,12 +64,12 @@ export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewP
   const endIndexMobile = startIndexMobile + CASES_PER_PAGE_MOBILE;
   const mobileCases = cases.slice(startIndexMobile, endIndexMobile);
   
-  // For desktop: 6 cases per page (3 left, 3 right)
+  // For desktop: 6 cases per page (3 left, 3 right) - fixed for all resolutions
   const startIndexDesktop = currentPage * CASES_PER_PAGE_DESKTOP;
   const endIndexDesktop = startIndexDesktop + CASES_PER_PAGE_DESKTOP;
   const displayCases = cases.slice(startIndexDesktop, endIndexDesktop);
   
-  // Split into left and right pages for desktop
+  // Split into left and right pages for desktop (3 cases per side)
   const leftPageCases = displayCases.slice(0, 3);
   const rightPageCases = displayCases.slice(3, 6);
 
@@ -96,7 +96,7 @@ export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewP
       {/* Mobile Layout - Single page with 3 cases, spiral binding on left */}
       <div className="md:hidden relative flex gap-0 h-[calc(100vh-280px)] max-h-[700px]">
         {/* Spiral Binding - Left side for mobile */}
-        <div className="w-6 flex flex-col items-center justify-center bg-gradient-to-b from-gray-400 via-gray-500 to-gray-400 relative z-20 flex-shrink-0">
+        <div className="w-6 flex flex-col items-center justify-center bg-gradient-to-b from-gray-400 via-gray-500 to-gray-400 relative z-20 flex-shrink-0 self-stretch">
           {/* Spiral holes */}
           <div className="absolute inset-y-0 w-full flex flex-col items-center justify-around py-4">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -123,13 +123,13 @@ export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewP
             
             <div className="relative z-10 space-y-2 flex flex-col flex-1 min-h-0">
               {mobileCases.map((caseData) => (
-                <div key={caseData.id} className="flex-1 min-h-0">
+                <div key={caseData.id} className="flex-1 min-h-[175px]">
                   <RegisterCaseCard caseData={caseData} meetingId={currentMeetingId} />
                 </div>
               ))}
               {mobileCases.length < 3 && (
                 Array.from({ length: 3 - mobileCases.length }).map((_, index) => (
-                  <div key={`empty-mobile-${index}`} className="flex-1 min-h-0 border-2 border-dashed rounded-lg flex items-center justify-center">
+                  <div key={`empty-mobile-${index}`} className="flex-1 min-h-[175px] border-2 border-dashed rounded-lg flex items-center justify-center">
                     <span className="text-muted-foreground text-xs">Empty slot</span>
                   </div>
                 ))
@@ -166,7 +166,7 @@ export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewP
       </div>
 
       {/* Desktop Layout - Two pages with 6 cases (3 left, 3 right), spiral binding in middle */}
-      <div className="hidden md:flex relative gap-0 h-[calc(100vh-280px)] max-h-[700px]">
+      <div className="hidden md:flex relative gap-0 min-h-[calc(100vh-280px)] overflow-y-auto">
         {/* Pagination Arrow - Left (Desktop) */}
         {totalPagesDesktop > 1 && (
           <Button
@@ -180,69 +180,72 @@ export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewP
           </Button>
         )}
 
-        {/* Left Page - 3 cases */}
-        <div className="flex-1 flex flex-col min-h-0 relative">
-          <div className="bg-white border-2 border-gray-300 rounded-l-lg p-4 space-y-2 flex flex-col flex-1 min-h-0 shadow-lg relative overflow-hidden">
-            {/* Paper texture effect */}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-gray-50/30 pointer-events-none" />
-            <div className="absolute inset-0 opacity-[0.02] bg-[radial-gradient(circle_at_50%_50%,black_1px,transparent_1px)] bg-[length:20px_20px] pointer-events-none" />
-            
-            <div className="relative z-10 space-y-2 flex flex-col flex-1 min-h-0">
-              {leftPageCases.map((caseData) => (
-                <div key={caseData.id} className="flex-1 min-h-0">
-                  <RegisterCaseCard caseData={caseData} meetingId={currentMeetingId} />
-                </div>
-              ))}
-              {leftPageCases.length < 3 && (
-                Array.from({ length: 3 - leftPageCases.length }).map((_, index) => (
-                  <div key={`empty-left-${index}`} className="flex-1 min-h-0 border-2 border-dashed rounded-lg flex items-center justify-center">
-                    <span className="text-muted-foreground text-xs">Empty slot</span>
+        {/* Wrapper to ensure pages and binding extend together - grows with content */}
+        <div className="flex flex-1 gap-0 items-stretch">
+          {/* Left Page - 3 cases */}
+          <div className="flex-1 flex flex-col">
+            <div className="bg-white border-2 border-gray-300 rounded-l-lg p-4 space-y-2 flex flex-col shadow-lg relative h-full" id="register-left-page">
+              {/* Paper texture effect */}
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-gray-50/30 pointer-events-none" />
+              <div className="absolute inset-0 opacity-[0.02] bg-[radial-gradient(circle_at_50%_50%,black_1px,transparent_1px)] bg-[length:20px_20px] pointer-events-none" />
+              
+              <div className="relative z-10 space-y-2 flex flex-col">
+                {leftPageCases.map((caseData) => (
+                  <div key={caseData.id} className="min-h-[175px] flex-shrink-0">
+                    <RegisterCaseCard caseData={caseData} meetingId={currentMeetingId} />
                   </div>
-                ))
-              )}
+                ))}
+                {leftPageCases.length < 3 && (
+                  Array.from({ length: 3 - leftPageCases.length }).map((_, index) => (
+                    <div key={`empty-left-${index}`} className="min-h-[175px] flex-shrink-0 border-2 border-dashed rounded-lg flex items-center justify-center">
+                      <span className="text-muted-foreground text-xs">Empty slot</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Spiral Binding - Middle for desktop */}
-        <div className="w-8 flex flex-col items-center justify-center bg-gradient-to-r from-gray-400 via-gray-500 to-gray-400 relative z-20">
-          {/* Spiral holes */}
-          <div className="absolute inset-y-0 w-full flex flex-col items-center justify-around py-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="w-3 h-3 rounded-full bg-white shadow-inner"
-                style={{
-                  marginTop: i === 0 ? '0' : 'auto',
-                  marginBottom: i === 7 ? '0' : 'auto',
-                }}
-              />
-            ))}
-          </div>
-          {/* Binding shadow */}
-          <div className="absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10" />
-        </div>
-
-        {/* Right Page - 3 cases */}
-        <div className="flex-1 flex flex-col min-h-0 relative">
-          <div className="bg-white border-2 border-gray-300 rounded-r-lg p-4 space-y-2 flex flex-col flex-1 min-h-0 shadow-lg relative overflow-hidden">
-            {/* Paper texture effect */}
-            <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-gray-50/30 pointer-events-none" />
-            <div className="absolute inset-0 opacity-[0.02] bg-[radial-gradient(circle_at_50%_50%,black_1px,transparent_1px)] bg-[length:20px_20px] pointer-events-none" />
-            
-            <div className="relative z-10 space-y-2 flex flex-col flex-1 min-h-0">
-              {rightPageCases.map((caseData) => (
-                <div key={caseData.id} className="flex-1 min-h-0">
-                  <RegisterCaseCard caseData={caseData} meetingId={currentMeetingId} />
-                </div>
+          {/* Spiral Binding - Middle for desktop - matches page height */}
+          <div className="w-8 flex-shrink-0 bg-gradient-to-r from-gray-400 via-gray-500 to-gray-400 relative z-20">
+            {/* Spiral holes - positioned absolutely to extend full height */}
+            <div className="absolute inset-y-0 w-full flex flex-col items-center justify-around py-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="w-3 h-3 rounded-full bg-white shadow-inner"
+                  style={{
+                    marginTop: i === 0 ? '0' : 'auto',
+                    marginBottom: i === 7 ? '0' : 'auto',
+                  }}
+                />
               ))}
-              {rightPageCases.length < 3 && (
-                Array.from({ length: 3 - rightPageCases.length }).map((_, index) => (
-                  <div key={`empty-right-${index}`} className="flex-1 min-h-0 border-2 border-dashed rounded-lg flex items-center justify-center">
-                    <span className="text-muted-foreground text-xs">Empty slot</span>
+            </div>
+            {/* Binding shadow */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/10 via-transparent to-black/10" />
+          </div>
+
+          {/* Right Page - 3 cases */}
+          <div className="flex-1 flex flex-col">
+            <div className="bg-white border-2 border-gray-300 rounded-r-lg p-4 space-y-2 flex flex-col shadow-lg relative h-full" id="register-right-page">
+              {/* Paper texture effect */}
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-gray-50/30 pointer-events-none" />
+              <div className="absolute inset-0 opacity-[0.02] bg-[radial-gradient(circle_at_50%_50%,black_1px,transparent_1px)] bg-[length:20px_20px] pointer-events-none" />
+              
+              <div className="relative z-10 space-y-2 flex flex-col">
+                {rightPageCases.map((caseData) => (
+                  <div key={caseData.id} className="min-h-[175px] flex-shrink-0">
+                    <RegisterCaseCard caseData={caseData} meetingId={currentMeetingId} />
                   </div>
-                ))
-              )}
+                ))}
+                {rightPageCases.length < 3 && (
+                  Array.from({ length: 3 - rightPageCases.length }).map((_, index) => (
+                    <div key={`empty-right-${index}`} className="min-h-[175px] flex-shrink-0 border-2 border-dashed rounded-lg flex items-center justify-center">
+                      <span className="text-muted-foreground text-xs">Empty slot</span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
         </div>

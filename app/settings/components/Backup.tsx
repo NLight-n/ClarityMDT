@@ -145,16 +145,23 @@ export function Backup() {
     try {
       const response = await fetch(`/api/backups/${backup.id}`);
       if (response.ok) {
-        const data = await response.json();
-        // Open download URL in new tab
-        window.open(data.url, "_blank");
+        // Get the blob from the streaming response
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = backup.fileName;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
       } else {
         const errorData = await response.json();
         setMessageDialog({
           open: true,
           type: "error",
           title: "Error",
-          message: errorData.error || "Failed to generate download URL",
+          message: errorData.error || "Failed to download backup",
         });
       }
     } catch (error) {

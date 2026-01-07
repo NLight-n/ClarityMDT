@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { getMinioClient, getDefaultBucket } from "@/lib/minio";
 import { convertToPdf } from "@/lib/office/convertToPdf";
 import { uploadFile } from "@/lib/minio/upload";
-import { generatePresignedUrl } from "@/lib/minio/generatePresignedUrl";
 
 /**
  * Generate storage key for converted PDF
@@ -75,10 +74,11 @@ export async function GET(
       // Try to stat the file to see if it exists
       await client.statObject(bucket, pdfStorageKey);
       
-      // PDF exists in cache, return presigned URL
-      const presignedUrl = await generatePresignedUrl(pdfStorageKey, 3600);
+      // PDF exists in cache, return streaming endpoint URL
+      const baseUrl = request.nextUrl.origin;
+      const streamUrl = `${baseUrl}/api/attachments/stream/${id}`;
       return NextResponse.json({
-        url: presignedUrl,
+        url: streamUrl,
         cached: true,
       });
     } catch (error: any) {
@@ -138,11 +138,12 @@ export async function GET(
       );
     }
 
-    // Generate presigned URL for the PDF
-    const presignedUrl = await generatePresignedUrl(pdfStorageKey, 3600);
+    // Return streaming endpoint URL for the PDF
+    const baseUrl = request.nextUrl.origin;
+    const streamUrl = `${baseUrl}/api/attachments/stream/${id}`;
 
     return NextResponse.json({
-      url: presignedUrl,
+      url: streamUrl,
       cached: false,
     });
   } catch (error) {

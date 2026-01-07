@@ -1,25 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
-import { isAdmin } from "@/lib/permissions/accessControl";
 import { getMinioClient, getDefaultBucket } from "@/lib/minio";
 
 /**
- * GET /api/admin/telegram-settings/qr-preview - Stream QR code image (Admin only)
- * This endpoint streams the QR code image directly from MinIO (using internal endpoint)
+ * GET /api/images/stream/[...path] - Stream an image from MinIO for display
+ * This endpoint streams images directly from MinIO (using internal endpoint)
+ * so browsers can display them without needing presigned URLs
  */
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
   try {
-    const user = await getCurrentUserFromRequest(request);
-    if (!user || !isAdmin(user)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const searchParams = request.nextUrl.searchParams;
-    const storageKey = searchParams.get("key");
+    const { path } = await params;
+    const storageKey = path.join("/");
 
     if (!storageKey) {
       return NextResponse.json(
-        { error: "Storage key is required" },
+        { error: "Invalid image path" },
         { status: 400 }
       );
     }
@@ -27,8 +24,8 @@ export async function GET(request: NextRequest) {
     const client = getMinioClient();
     const bucket = getDefaultBucket();
 
+    // Get the file from MinIO
     try {
-      // Get the file from MinIO
       const fileStream = await client.getObject(bucket, storageKey);
       const stat = await client.statObject(bucket, storageKey);
 
@@ -39,7 +36,7 @@ export async function GET(request: NextRequest) {
       }
       const fileBuffer = Buffer.concat(chunks);
 
-      // Determine content type from file extension
+      // Determine content type from file extension or default to image
       let contentType = "image/png"; // default
       const extension = storageKey.split(".").pop()?.toLowerCase();
       if (extension === "jpg" || extension === "jpeg") {
@@ -52,30 +49,30 @@ export async function GET(request: NextRequest) {
         contentType = "image/webp";
       }
 
-      // Return the image with inline disposition
+      // Return the image with inline disposition (for viewing)
       return new NextResponse(fileBuffer, {
         status: 200,
         headers: {
           "Content-Type": contentType,
-          "Content-Disposition": `inline; filename="${encodeURIComponent(storageKey.split("/").pop() || "qr-code")}"`,
+          "Content-Disposition": `inline; filename="${encodeURIComponent(storageKey.split("/").pop() || "image")}"`,
           "Content-Length": stat.size.toString(),
           "Cache-Control": "private, max-age=3600",
         },
       });
     } catch (minioError: any) {
-      console.error("Error retrieving QR code from MinIO:", minioError);
+      console.error("Error retrieving image from MinIO:", minioError);
       if (minioError.code === "NoSuchKey" || minioError.code === "NotFound") {
         return NextResponse.json(
-          { error: "QR code image not found in storage" },
+          { error: "Image not found in storage" },
           { status: 404 }
         );
       }
       throw minioError;
     }
   } catch (error) {
-    console.error("Error fetching QR code preview:", error);
+    console.error("Error streaming image:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Failed to stream image" },
       { status: 500 }
     );
   }

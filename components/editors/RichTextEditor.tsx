@@ -29,12 +29,12 @@ export function RichTextEditor({
     
     const processNode = (node: any): any => {
       if (node.type === "image" && node.attrs?.storageKey) {
-        // If image has storageKey, use API endpoint (will redirect to presigned URL)
+        // If image has storageKey, use streaming endpoint
         return {
           ...node,
           attrs: {
             ...node.attrs,
-            src: `/api/images/${node.attrs.storageKey}`,
+            src: `/api/images/stream/${encodeURIComponent(node.attrs.storageKey)}`,
           },
         };
       }

@@ -6,7 +6,10 @@ import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
 
 /**
  * GET /api/hospital-settings - Get hospital settings
+ * Public endpoint - no authentication required
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     // Get the first (and should be only) hospital settings record
@@ -17,18 +20,36 @@ export async function GET() {
       return NextResponse.json({
         name: null,
         logoUrl: null,
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
     }
 
     return NextResponse.json({
       name: settings.name,
       logoUrl: settings.logoUrl,
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
   } catch (error) {
     console.error("Error fetching hospital settings:", error);
+    // Always return valid JSON, even on error
     return NextResponse.json(
-      { error: "Failed to fetch hospital settings" },
-      { status: 500 }
+      {
+        name: null,
+        logoUrl: null,
+        error: "Failed to fetch hospital settings",
+      },
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
     );
   }
 }

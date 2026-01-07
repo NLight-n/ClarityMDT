@@ -97,19 +97,10 @@ export function UserProfile() {
             setSignatureAuthenticated(userData.signatureAuthenticated || false);
             setTelegramId(userData.telegramId || null);
             
-            // Generate presigned URL for signature image if it exists
+            // Set streaming URL for signature image if it exists
             if (userData.signatureUrl) {
-              try {
-                const urlResponse = await fetch(`/api/images/${encodeURIComponent(userData.signatureUrl)}`, {
-                  headers: { Accept: "application/json" },
-                });
-                if (urlResponse.ok) {
-                  const { url } = await urlResponse.json();
-                  setSignatureImageUrl(url);
-                }
-              } catch (error) {
-                console.error("Error fetching signature URL:", error);
-              }
+              // Use streaming endpoint instead of presigned URL
+              setSignatureImageUrl(`/api/images/stream/${encodeURIComponent(userData.signatureUrl)}`);
             }
           }
           

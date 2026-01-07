@@ -10,6 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
+interface HospitalSettings {
+  name: string | null;
+  logoUrl: string | null;
+}
+
 function LoginForm() {
   const searchParams = useSearchParams();
   const [loginId, setLoginId] = useState("");
@@ -17,6 +22,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
+  const [hospitalSettings, setHospitalSettings] = useState<HospitalSettings | null>(null);
 
   // Get CSRF token on mount and check for errors in URL
   useEffect(() => {
@@ -44,6 +50,52 @@ function LoginForm() {
         setError("Login failed. Please try again.");
       }
     }
+
+    // Load hospital settings
+    const loadHospitalSettings = async () => {
+      try {
+        const response = await fetch("/api/hospital-settings", {
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        
+        // Check if response is OK and is JSON
+        if (response.ok) {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            try {
+              const data = await response.json();
+              
+              // Only proceed if we have valid data without errors
+              if (data && !data.error) {
+                // Check if we have valid name or logo
+                const hasName = data.name && typeof data.name === 'string' && data.name.trim() !== "";
+                const hasLogo = data.logoUrl && typeof data.logoUrl === 'string' && data.logoUrl.trim() !== "";
+                
+                // Set state if we have at least one valid field
+                if (hasName || hasLogo) {
+                  setHospitalSettings({
+                    name: hasName ? data.name.trim() : null,
+                    logoUrl: hasLogo ? data.logoUrl.trim() : null,
+                  });
+                }
+              }
+            } catch (jsonError) {
+              // Failed to parse JSON
+              console.warn("Failed to parse hospital settings JSON:", jsonError);
+            }
+          }
+        }
+      } catch (error) {
+        // Silently fail - hospital branding is optional
+        // Only log in development
+        if (process.env.NODE_ENV === 'development') {
+          console.error("Error loading hospital settings:", error);
+        }
+      }
+    };
+    loadHospitalSettings();
   }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -106,7 +158,7 @@ function LoginForm() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">ClarityMDT</CardTitle>
@@ -161,6 +213,27 @@ function LoginForm() {
           </form>
         </CardContent>
       </Card>
+      
+      {/* Hospital Branding Footer - Only show if settings are configured */}
+      {hospitalSettings && (hospitalSettings.name || hospitalSettings.logoUrl) && (
+        <div className="mt-8 flex flex-col items-center gap-3">
+          {hospitalSettings.logoUrl && (
+            <div className="relative h-10 w-auto max-w-[200px] flex items-center justify-center">
+              <img
+                src={hospitalSettings.logoUrl}
+                alt={hospitalSettings.name || "Hospital Logo"}
+                className="h-full w-auto object-contain"
+                style={{ maxHeight: "40px" }}
+              />
+            </div>
+          )}
+          {hospitalSettings.name && (
+            <h3 className="text-sm font-semibold text-muted-foreground text-center">
+              {hospitalSettings.name}
+            </h3>
+          )}
+        </div>
+      )}
     </div>
   );
 }

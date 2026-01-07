@@ -125,29 +125,17 @@ export function UserManagement() {
         const data = await response.json();
         setUsers(data);
         
-        // Load signature URLs for users who have signatures
-        const signaturePromises = data
-          .filter((u: any) => u.signatureUrl)
-          .map(async (u: any) => {
-            try {
-              const urlResponse = await fetch(`/api/images/${encodeURIComponent(u.signatureUrl)}`, {
-                headers: { Accept: "application/json" },
-              });
-              if (urlResponse.ok) {
-                const { url } = await urlResponse.json();
-                return { userId: u.id, url, authenticated: u.signatureAuthenticated };
-              }
-            } catch (error) {
-              console.error(`Error loading signature for user ${u.id}:`, error);
-            }
-            return { userId: u.id, url: null, authenticated: u.signatureAuthenticated };
-          });
-        
-        const signatures = await Promise.all(signaturePromises);
+        // Load signature URLs for users who have signatures (use streaming endpoint)
         const signatureMap: Record<string, { url: string | null; authenticated: boolean }> = {};
-        signatures.forEach((s) => {
-          if (s) signatureMap[s.userId] = { url: s.url, authenticated: s.authenticated };
-        });
+        data
+          .filter((u: any) => u.signatureUrl)
+          .forEach((u: any) => {
+            // Use streaming endpoint directly
+            signatureMap[u.id] = {
+              url: `/api/images/stream/${encodeURIComponent(u.signatureUrl)}`,
+              authenticated: u.signatureAuthenticated,
+            };
+          });
         setUserSignatures(signatureMap);
       }
     } catch (error) {

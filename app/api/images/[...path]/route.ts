@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generatePresignedUrl } from "@/lib/minio/generatePresignedUrl";
 
 /**
- * GET /api/images/[...path] - Get presigned URL for an image stored in MinIO
+ * GET /api/images/[...path] - Redirect to streaming endpoint for images
  * This is used to display images in the rich text editor
- * Returns a redirect to the presigned URL
+ * Redirects to the streaming endpoint for consistent image serving
  */
 export async function GET(
   request: NextRequest,
@@ -21,18 +20,19 @@ export async function GET(
       );
     }
 
-    // Generate presigned URL (valid for 7 days)
-    const imageUrl = await generatePresignedUrl(storageKey, 7 * 24 * 60 * 60);
+    // Redirect to streaming endpoint
+    const baseUrl = request.nextUrl.origin;
+    const streamUrl = `${baseUrl}/api/images/stream/${encodeURIComponent(storageKey)}`;
 
     // Check if client wants JSON response (for programmatic access)
     const acceptHeader = request.headers.get("accept");
     if (acceptHeader?.includes("application/json")) {
-      return NextResponse.json({ url: imageUrl });
+      return NextResponse.json({ url: streamUrl });
     }
 
-    // Redirect to the presigned URL
+    // Redirect to the streaming endpoint
     // This works for <img src="/api/images/..."> tags
-    return NextResponse.redirect(imageUrl);
+    return NextResponse.redirect(streamUrl);
   } catch (error) {
     console.error("Error generating image URL:", error);
     return NextResponse.json(

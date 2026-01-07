@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Upload, X, File, FileText, Image, Loader2, Trash2, RotateCcw, Eye, Download } from "lucide-react";
+import { Upload, X, File, FileText, Image, Trash2, RotateCcw, Eye, Download } from "lucide-react";
 import { FileIcon, defaultStyles } from "react-file-icon";
 import { useSession } from "next-auth/react";
 import { isCoordinator } from "@/lib/permissions/client";
 import { CaseStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { useAlertContext } from "@/contexts/AlertContext";
+import { FileViewerModal } from "./FileViewerModal";
 
 // File validation constants (matching API route)
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -70,7 +71,8 @@ export function AttachmentManager({
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [filesToDelete, setFilesToDelete] = useState<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [loadingAttachmentId, setLoadingAttachmentId] = useState<string | null>(null);
+  const [viewerModalOpen, setViewerModalOpen] = useState(false);
+  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
 
   const user = session?.user
     ? {
@@ -269,75 +271,14 @@ export function AttachmentManager({
     window.open(`/api/attachments/file/${attachment.id}`, "_blank");
   };
 
-  const handleView = async (attachment: Attachment) => {
-    try {
-      // Get presigned URL for viewing
-      const response = await fetch(`/api/attachments/view/${attachment.id}`);
-      if (!response.ok) {
-        throw new Error("Failed to get view URL");
-      }
-      const data = await response.json();
-      const { url, fileType, needsConversion } = data;
-
-      // Check file type to determine how to open it
-      const isImage = fileType.startsWith("image/");
-      const isPdf = fileType === "application/pdf";
-      const isWord = fileType === "application/msword" || 
-                     fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-      const isExcel = fileType === "application/vnd.ms-excel" || 
-                      fileType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-      const isPowerPoint = fileType === "application/vnd.ms-powerpoint" || 
-                           fileType === "application/vnd.openxmlformats-officedocument.presentationml.presentation";
-
-      if (isImage || isPdf) {
-        // Open images and PDFs directly in browser
-        window.open(url, "_blank");
-      } else if (isWord || isExcel || isPowerPoint) {
-        // For Office files, convert to PDF first
-        if (needsConversion) {
-          // Set loading state
-          setLoadingAttachmentId(attachment.id);
-          try {
-            const conversionResponse = await fetch(url);
-            if (!conversionResponse.ok) {
-              const errorData = await conversionResponse.json();
-              throw new Error(errorData.error || "Failed to convert file to PDF");
-            }
-            const conversionData = await conversionResponse.json();
-            // Open the converted PDF in new tab
-            window.open(conversionData.url, "_blank");
-          } catch (conversionError: any) {
-            console.error("Error converting file to PDF:", conversionError);
-            await alert({
-              type: "error",
-              title: "Conversion Error",
-              message: conversionError.message || "Failed to convert file to PDF. Please try downloading the file instead.",
-            });
-          } finally {
-            // Clear loading state
-            setLoadingAttachmentId(null);
-          }
-        } else {
-          // Direct URL (shouldn't happen for Office files, but fallback)
-          window.open(url, "_blank");
-        }
-      } else {
-        // Fallback to direct download for other file types
-        window.open(url, "_blank");
-      }
-    } catch (error) {
-      console.error("Error viewing attachment:", error);
-      setLoadingAttachmentId(null); // Clear loading state on error
-      await alert({
-        type: "error",
-        title: "Error",
-        message: "Failed to open attachment. Please try downloading it instead.",
-      });
-    }
+  const handleView = (attachment: Attachment) => {
+    setViewingAttachment(attachment);
+    setViewerModalOpen(true);
   };
 
 
   return (
+    <>
     <TooltipProvider>
       <Card>
         <CardHeader className="pt-3 pb-2">
@@ -467,17 +408,12 @@ export function AttachmentManager({
                               handleView(attachment);
                             }}
                             className="h-7 w-7"
-                            disabled={loadingAttachmentId === attachment.id}
                           >
-                            {loadingAttachmentId === attachment.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Eye className="h-4 w-4" />
-                            )}
+                            <Eye className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>{loadingAttachmentId === attachment.id ? "Converting..." : "View"}</p>
+                          <p>View</p>
                         </TooltipContent>
                       </Tooltip>
                       <Tooltip>
@@ -544,6 +480,16 @@ export function AttachmentManager({
       </CardContent>
     </Card>
     </TooltipProvider>
+    {viewingAttachment && (
+      <FileViewerModal
+        open={viewerModalOpen}
+        onOpenChange={setViewerModalOpen}
+        attachmentId={viewingAttachment.id}
+        fileName={viewingAttachment.fileName}
+        fileType={viewingAttachment.fileType}
+      />
+    )}
+    </>
   );
 }
 

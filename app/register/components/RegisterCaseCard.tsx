@@ -140,9 +140,9 @@ export function RegisterCaseCard({ caseData, className, meetingId }: RegisterCas
 
   return (
     <Link href={caseUrl} className={cn("h-full flex", className)}>
-      <Card className="hover:shadow-md transition-shadow cursor-pointer h-full w-full flex flex-col">
-        <CardContent className="p-3 flex flex-col flex-1 min-h-0">
-          <div className="space-y-2 flex flex-col flex-1 min-h-0">
+      <Card className="hover:shadow-md transition-shadow cursor-pointer h-full w-full flex flex-col overflow-hidden">
+        <CardContent className="p-3 flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="space-y-2 flex flex-col flex-1 min-h-0 overflow-hidden">
             {/* Patient Details */}
             <div className="space-y-1 flex-shrink-0">
               <div className="flex items-center justify-between gap-2">

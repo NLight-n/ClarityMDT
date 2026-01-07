@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { isAdmin } from "@/lib/permissions/accessControl";
 import { prisma } from "@/lib/prisma";
-import { getMinioClient } from "@/lib/minio/client";
-import { generatePresignedUrl } from "@/lib/minio/generatePresignedUrl";
+import { getMinioClient, getDefaultBucket } from "@/lib/minio";
 
 /**
- * GET /api/backups/[id] - Download a backup (Admin only)
+ * GET /api/backups/[id] - Stream a backup file for download (Admin only)
  */
 export async function GET(
   request: NextRequest,
@@ -28,14 +27,31 @@ export async function GET(
       return NextResponse.json({ error: "Backup not found" }, { status: 404 });
     }
 
-    // Generate presigned URL for download (valid for 1 hour)
-    const url = await generatePresignedUrl(backup.storageKey, 3600);
+    // Stream the file directly from MinIO
+    const client = getMinioClient();
+    const bucket = getDefaultBucket();
 
-    return NextResponse.json({
-      url,
-      fileName: backup.fileName,
-      fileSize: backup.fileSize.toString(),
-    });
+    try {
+      const fileStream = await client.getObject(bucket, backup.storageKey);
+      const stat = await client.statObject(bucket, backup.storageKey);
+
+      const headers = new Headers();
+      headers.set("Content-Type", "application/octet-stream");
+      headers.set("Content-Disposition", `attachment; filename="${backup.fileName}"`);
+      headers.set("Content-Length", stat.size.toString());
+      headers.set("Cache-Control", "private, no-cache");
+
+      return new NextResponse(fileStream as any, { headers });
+    } catch (error: any) {
+      console.error("Error streaming backup:", error);
+      if (error.code === "NoSuchKey" || error.code === "NotFound") {
+        return NextResponse.json({ error: "Backup file not found" }, { status: 404 });
+      }
+      return NextResponse.json(
+        { error: "Failed to stream backup" },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("Error generating backup download URL:", error);
     return NextResponse.json(

@@ -6,7 +6,6 @@ import {
   generatePathologyInlineKey,
   generateClinicalInlineKey,
 } from "@/lib/minio/upload";
-import { generatePresignedUrl } from "@/lib/minio/generatePresignedUrl";
 
 /**
  * POST /api/cases/[id]/upload-inline-image - Upload an inline image for radiology or pathology findings
@@ -80,8 +79,9 @@ export async function POST(
       contentType: file.type,
     });
 
-    // Generate presigned URL for displaying the image
-    const imageUrl = await generatePresignedUrl(storageKey, 7 * 24 * 60 * 60); // 7 days
+    // Generate streaming endpoint URL for displaying the image
+    const baseUrl = request.nextUrl.origin;
+    const imageUrl = `${baseUrl}/api/images/stream/${encodeURIComponent(storageKey)}`;
 
     return NextResponse.json({
       storageKey,

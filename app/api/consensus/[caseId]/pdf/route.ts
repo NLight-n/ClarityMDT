@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canViewCase } from "@/lib/permissions/accessControl";
 import { generateConsensusPDF } from "@/lib/pdf/consensusTemplate";
-import { generatePresignedUrl } from "@/lib/minio/generatePresignedUrl";
+import { getMinioClient, getDefaultBucket } from "@/lib/minio";
 
 /**
  * GET /api/consensus/[caseId]/pdf - Generate and download consensus report PDF
@@ -130,25 +130,26 @@ export async function GET(
               
               if (hasSignature) {
                 try {
-                  // Generate presigned URL and fetch image
-                  const imageUrl = await generatePresignedUrl(
-                    attendee.user.signatureUrl!,
-                    3600 // 1 hour expiry
-                  );
+                  // Fetch image directly from MinIO using streaming
+                  const client = getMinioClient();
+                  const bucket = getDefaultBucket();
+                  const fileStream = await client.getObject(bucket, attendee.user.signatureUrl!);
                   
-                  // Fetch the image
-                  const imageResponse = await fetch(imageUrl);
-                  if (imageResponse.ok) {
-                    const imageBuffer = await imageResponse.arrayBuffer();
-                    return {
-                      userId: attendee.user.id,
-                      name: attendee.user.name,
-                      role: attendee.user.role,
-                      department: attendee.user.department?.name || null,
-                      signatureUrl: attendee.user.signatureUrl,
-                      signatureImage: new Uint8Array(imageBuffer),
-                    };
+                  // Convert stream to buffer
+                  const chunks: Buffer[] = [];
+                  for await (const chunk of fileStream) {
+                    chunks.push(chunk);
                   }
+                  const imageBuffer = Buffer.concat(chunks);
+                  
+                  return {
+                    userId: attendee.user.id,
+                    name: attendee.user.name,
+                    role: attendee.user.role,
+                    department: attendee.user.department?.name || null,
+                    signatureUrl: attendee.user.signatureUrl,
+                    signatureImage: new Uint8Array(imageBuffer),
+                  };
                 } catch (error) {
                   console.error(`Error fetching signature for ${attendee.user.name}:`, error);
                 }

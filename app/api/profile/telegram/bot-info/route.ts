@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { prisma } from "@/lib/prisma";
-import { generatePresignedUrl } from "@/lib/minio/generatePresignedUrl";
 
 /**
  * GET /api/profile/telegram/bot-info - Get Telegram bot info (bot username and QR code) for linking
  * Available to all authenticated users
+ * Returns the QR code URL as a streaming endpoint path instead of presigned URL
  */
 export async function GET(request: NextRequest) {
   try {
@@ -27,11 +27,9 @@ export async function GET(request: NextRequest) {
 
     let qrCodePreviewUrl: string | null = null;
     if (settings.qrCodeUrl) {
-      try {
-        qrCodePreviewUrl = await generatePresignedUrl(settings.qrCodeUrl, 3600);
-      } catch (error) {
-        console.error("Error generating QR code preview URL:", error);
-      }
+      // Use streaming endpoint instead of presigned URL
+      const baseUrl = request.nextUrl.origin;
+      qrCodePreviewUrl = `${baseUrl}/api/images/stream/${encodeURIComponent(settings.qrCodeUrl)}`;
     }
 
     return NextResponse.json({

@@ -143,7 +143,7 @@ All configuration is done through the `.env` file. Key variables:
 - `NEXTAUTH_SECRET`: Secret key for JWT encryption (required)
 
 #### MinIO Configuration
-- `MINIO_ENDPOINT`: MinIO server endpoint (use `minio` for Docker Compose)
+- `MINIO_ENDPOINT`: MinIO server endpoint (use `minio` for Docker Compose internal network)
 - `MINIO_PORT`: MinIO API port (default: 9000)
 - `MINIO_CONSOLE_PORT`: MinIO Console port (default: 9001)
 - `MINIO_ROOT_USER`: MinIO root username

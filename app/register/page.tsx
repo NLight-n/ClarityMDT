@@ -120,9 +120,12 @@ function RegisterPageContent() {
   if (!currentMeeting) {
     return (
       <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center p-12 border rounded-lg">
+        <div className="flex flex-col items-center justify-center p-12 border rounded-lg">
           <p className="text-muted-foreground">
             No upcoming meetings found.
+          </p>
+          <p className="text-sm text-muted-foreground mt-2">
+            Open previous meetings by clicking on the calendar.
           </p>
         </div>
       </div>
