@@ -4,18 +4,21 @@ import { isAdmin } from "@/lib/permissions/accessControl";
 import { getMinioClient, getDefaultBucket } from "@/lib/minio";
 
 /**
- * GET /api/admin/telegram-settings/qr-preview - Stream QR code image (Admin only)
+ * GET /api/admin/telegram-settings/qr-preview/[...path] - Stream QR code image (Admin only)
  * This endpoint streams the QR code image directly from MinIO (using internal endpoint)
  */
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> }
+) {
   try {
     const user = await getCurrentUserFromRequest(request);
     if (!user || !isAdmin(user)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const searchParams = request.nextUrl.searchParams;
-    const storageKey = searchParams.get("key");
+    const { path } = await params;
+    const storageKey = path.join("/");
 
     if (!storageKey) {
       return NextResponse.json(

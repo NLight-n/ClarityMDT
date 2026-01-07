@@ -217,26 +217,33 @@ function LoginForm() {
         </CardContent>
       </Card>
       
-      {/* Hospital Branding Footer - Only show if settings are configured */}
-      {hospitalSettings && (hospitalSettings.name || hospitalSettings.logoUrl) && (
-        <div className="mt-8 flex flex-col items-center gap-3">
-          {hospitalSettings.logoUrl && (
-            <div className="relative h-10 w-auto max-w-[200px] flex items-center justify-center">
-              <img
-                src={hospitalSettings.logoUrl}
-                alt={hospitalSettings.name || "Hospital Logo"}
-                className="h-full w-auto object-contain"
-                style={{ maxHeight: "40px" }}
-              />
+          {/* Hospital Branding Footer - Only show if settings are configured */}
+          {hospitalSettings && (hospitalSettings.name || hospitalSettings.logoUrl) && (
+            <div className="mt-8 flex flex-col items-center gap-3">
+              {hospitalSettings.logoUrl && (() => {
+                // Handle both base64 data URLs and MinIO storage keys
+                const logoUrl = hospitalSettings.logoUrl.startsWith("data:image/")
+                  ? hospitalSettings.logoUrl
+                  : `/api/images/stream/${hospitalSettings.logoUrl}`;
+                
+                return (
+                  <div className="relative h-10 w-auto max-w-[200px] flex items-center justify-center">
+                    <img
+                      src={logoUrl}
+                      alt={hospitalSettings.name || "Hospital Logo"}
+                      className="h-full w-auto object-contain"
+                      style={{ maxHeight: "40px" }}
+                    />
+                  </div>
+                );
+              })()}
+              {hospitalSettings.name && (
+                <h3 className="text-sm font-semibold text-muted-foreground text-center">
+                  {hospitalSettings.name}
+                </h3>
+              )}
             </div>
           )}
-          {hospitalSettings.name && (
-            <h3 className="text-sm font-semibold text-muted-foreground text-center">
-              {hospitalSettings.name}
-            </h3>
-          )}
-        </div>
-      )}
     </div>
   );
 }

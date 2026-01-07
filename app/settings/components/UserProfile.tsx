@@ -921,12 +921,17 @@ export function UserProfile() {
                                   setManualBotUsername(data.botUsername || "");
                                   // Use streaming endpoint if qrCodeUrl is provided
                                   if (data.qrCodeUrl) {
-                                    // If it's already a full URL (streaming endpoint), use it directly
-                                    // Otherwise, it's a storage key, so convert to streaming endpoint
-                                    const qrUrl = data.qrCodeUrl.startsWith('http') 
-                                      ? data.qrCodeUrl 
-                                      : `/api/images/stream/${data.qrCodeUrl}`;
-                                    setQrCodeUrl(qrUrl);
+                                    // Check if it's a presigned URL (old data) or streaming endpoint
+                                    if (data.qrCodeUrl.includes('minio:9000') || data.qrCodeUrl.includes('X-Amz-')) {
+                                      // It's a presigned URL - can't use it, user needs to re-upload QR code
+                                      setQrCodeUrl(null);
+                                    } else if (data.qrCodeUrl.startsWith('http') && data.qrCodeUrl.includes('/api/')) {
+                                      // It's already a streaming endpoint URL
+                                      setQrCodeUrl(data.qrCodeUrl);
+                                    } else {
+                                      // It's a storage key - use streaming endpoint
+                                      setQrCodeUrl(`/api/images/stream/${data.qrCodeUrl}`);
+                                    }
                                   } else {
                                     setQrCodeUrl(null);
                                   }

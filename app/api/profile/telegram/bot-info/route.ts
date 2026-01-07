@@ -27,9 +27,16 @@ export async function GET(request: NextRequest) {
 
     let qrCodePreviewUrl: string | null = null;
     if (settings.qrCodeUrl) {
-      // Use streaming endpoint instead of presigned URL (no encoding to preserve path)
-      const baseUrl = request.nextUrl.origin;
-      qrCodePreviewUrl = `${baseUrl}/api/images/stream/${settings.qrCodeUrl}`;
+      // Use streaming endpoint - check if it's already a full URL or a storage key
+      if (settings.qrCodeUrl.startsWith("http://") || settings.qrCodeUrl.startsWith("https://")) {
+        // It's a presigned URL (old data) - we can't use it, return null
+        // User will need to re-upload the QR code
+        qrCodePreviewUrl = null;
+      } else {
+        // It's a storage key - use streaming endpoint
+        const baseUrl = request.nextUrl.origin;
+        qrCodePreviewUrl = `${baseUrl}/api/images/stream/${settings.qrCodeUrl}`;
+      }
     }
 
     return NextResponse.json({

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { isAdmin } from "@/lib/permissions/accessControl";
 import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
+import { uploadFile } from "@/lib/minio/upload";
 
 /**
  * GET /api/hospital-settings - Get hospital settings
@@ -84,24 +85,61 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Update or create hospital settings
-    // There should only be one record, so we use upsert
+    // Get existing settings
     const previousSettings = await prisma.hospitalSettings.findFirst();
     
+    // Prepare update data
+    const updateData: any = {};
+    
+    if (name !== undefined) {
+      updateData.name = name?.trim() || null;
+    }
+
+    // Handle logo upload - if it's a base64 data URL, upload to MinIO
+    if (logoUrl !== undefined) {
+      if (logoUrl && logoUrl.startsWith("data:image/")) {
+        // Upload base64 image to MinIO
+        try {
+          const base64Data = logoUrl.split(",")[1];
+          const buffer = Buffer.from(base64Data, "base64");
+          
+          // Determine file extension from data URL
+          const mimeMatch = logoUrl.match(/data:image\/(\w+);base64/);
+          const extension = mimeMatch ? mimeMatch[1] : "png";
+          
+          const storageKey = `hospital/logo-${Date.now()}.${extension}`;
+          await uploadFile(buffer, storageKey, {
+            contentType: `image/${extension}`,
+          });
+          
+          updateData.logoUrl = storageKey;
+        } catch (uploadError) {
+          console.error("Error uploading hospital logo:", uploadError);
+          return NextResponse.json(
+            { error: "Failed to upload logo image" },
+            { status: 500 }
+          );
+        }
+      } else if (logoUrl === null || logoUrl === "") {
+        updateData.logoUrl = null;
+      } else {
+        // If it's already a storage key or URL, use it as-is
+        updateData.logoUrl = logoUrl;
+      }
+    }
+
+    // Update or create hospital settings
     let settings;
     if (previousSettings) {
       settings = await prisma.hospitalSettings.update({
         where: { id: previousSettings.id },
-        data: {
-          ...(name !== undefined && { name: name || null }),
-          ...(logoUrl !== undefined && { logoUrl: logoUrl || null }),
-        },
+        data: updateData,
       });
     } else {
       settings = await prisma.hospitalSettings.create({
         data: {
-          name: name || null,
-          logoUrl: logoUrl || null,
+          name: updateData.name ?? null,
+          logoUrl: updateData.logoUrl ?? null,
         },
       });
     }

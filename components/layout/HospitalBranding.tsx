@@ -48,12 +48,27 @@ export function HospitalBranding() {
     );
   }
 
+  // Determine logo URL - handle both base64 data URLs and MinIO storage keys
+  const getLogoUrl = () => {
+    if (!settings.logoUrl) return null;
+    
+    // If it's a base64 data URL, use it directly
+    if (settings.logoUrl.startsWith("data:image/")) {
+      return settings.logoUrl;
+    }
+    
+    // Otherwise, it's a storage key - use streaming endpoint
+    return `/api/images/stream/${settings.logoUrl}`;
+  };
+
+  const logoUrl = getLogoUrl();
+
   return (
     <div className="flex items-center gap-4">
-      {settings.logoUrl ? (
+      {logoUrl ? (
         <div className="relative h-10 w-auto max-w-[200px] flex items-center">
           <img
-            src={settings.logoUrl}
+            src={logoUrl}
             alt={settings.name || "Hospital Logo"}
             className="h-full w-auto object-contain"
             style={{ maxHeight: "40px" }}

@@ -81,8 +81,8 @@ export function TelegramSettings() {
 
   const loadQrCodePreview = async (storageKey: string) => {
     try {
-      // Use streaming endpoint directly
-      setQrCodePreview(`/api/admin/telegram-settings/qr-preview?key=${encodeURIComponent(storageKey)}`);
+      // Use streaming endpoint directly (path-based, no encoding needed)
+      setQrCodePreview(`/api/admin/telegram-settings/qr-preview/${storageKey}`);
     } catch (error) {
       console.error("Error loading QR code preview:", error);
     }
