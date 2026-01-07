@@ -925,8 +925,11 @@ export function UserProfile() {
                                     if (data.qrCodeUrl.includes('minio:9000') || data.qrCodeUrl.includes('X-Amz-')) {
                                       // It's a presigned URL - can't use it, user needs to re-upload QR code
                                       setQrCodeUrl(null);
+                                    } else if (data.qrCodeUrl.startsWith('/api/')) {
+                                      // It's already a relative streaming endpoint URL (from bot-info API)
+                                      setQrCodeUrl(data.qrCodeUrl);
                                     } else if (data.qrCodeUrl.startsWith('http') && data.qrCodeUrl.includes('/api/')) {
-                                      // It's already a streaming endpoint URL
+                                      // It's a full streaming endpoint URL
                                       setQrCodeUrl(data.qrCodeUrl);
                                     } else {
                                       // It's a storage key - use streaming endpoint

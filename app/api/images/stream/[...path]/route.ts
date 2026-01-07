@@ -21,6 +21,8 @@ export async function GET(
       );
     }
 
+    console.log(`[Image Stream] Requested storage key: ${storageKey}`);
+
     const client = getMinioClient();
     const bucket = getDefaultBucket();
 
@@ -29,8 +31,11 @@ export async function GET(
 
     // Get the file from MinIO
     try {
-      const fileStream = await client.getObject(bucket, storageKey);
+      // First check if file exists
       const stat = await client.statObject(bucket, storageKey);
+      console.log(`[Image Stream] File found: ${storageKey}, size: ${stat.size} bytes`);
+      
+      const fileStream = await client.getObject(bucket, storageKey);
 
       // Convert stream to buffer
       const chunks: Buffer[] = [];
@@ -63,14 +68,22 @@ export async function GET(
         },
       });
     } catch (minioError: any) {
-      console.error("Error retrieving image from MinIO:", minioError);
+      console.error(`[Image Stream] Error retrieving image from MinIO:`, {
+        code: minioError.code,
+        message: minioError.message,
+        storageKey,
+        bucket,
+      });
+      
       if (minioError.code === "NoSuchKey" || minioError.code === "NotFound") {
+        console.error(`[Image Stream] File not found: ${storageKey} in bucket ${bucket}`);
         return NextResponse.json(
-          { error: "Image not found in storage" },
+          { error: "Image not found in storage", details: `Storage key: ${storageKey}` },
           { status: 404 }
         );
       }
       if (minioError.code === "NoSuchBucket") {
+        console.error(`[Image Stream] Bucket not found: ${bucket}`);
         return NextResponse.json(
           { error: "Storage bucket not found. Please check MinIO configuration." },
           { status: 500 }
