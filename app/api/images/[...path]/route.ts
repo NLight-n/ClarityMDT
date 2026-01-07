@@ -20,9 +20,9 @@ export async function GET(
       );
     }
 
-    // Redirect to streaming endpoint
+    // Redirect to streaming endpoint (do not encode to preserve path segments)
     const baseUrl = request.nextUrl.origin;
-    const streamUrl = `${baseUrl}/api/images/stream/${encodeURIComponent(storageKey)}`;
+    const streamUrl = `${baseUrl}/api/images/stream/${storageKey}`;
 
     // Check if client wants JSON response (for programmatic access)
     const acceptHeader = request.headers.get("accept");

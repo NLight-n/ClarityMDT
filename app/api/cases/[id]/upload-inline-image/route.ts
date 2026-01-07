@@ -79,9 +79,9 @@ export async function POST(
       contentType: file.type,
     });
 
-    // Generate streaming endpoint URL for displaying the image
+    // Generate streaming endpoint URL for displaying the image (no encoding to preserve path)
     const baseUrl = request.nextUrl.origin;
-    const imageUrl = `${baseUrl}/api/images/stream/${encodeURIComponent(storageKey)}`;
+    const imageUrl = `${baseUrl}/api/images/stream/${storageKey}`;
 
     return NextResponse.json({
       storageKey,

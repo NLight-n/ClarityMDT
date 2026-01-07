@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
 
     let qrCodePreviewUrl: string | null = null;
     if (settings.qrCodeUrl) {
-      // Use streaming endpoint instead of presigned URL
+      // Use streaming endpoint instead of presigned URL (no encoding to preserve path)
       const baseUrl = request.nextUrl.origin;
-      qrCodePreviewUrl = `${baseUrl}/api/images/stream/${encodeURIComponent(settings.qrCodeUrl)}`;
+      qrCodePreviewUrl = `${baseUrl}/api/images/stream/${settings.qrCodeUrl}`;
     }
 
     return NextResponse.json({

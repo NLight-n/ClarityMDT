@@ -99,8 +99,8 @@ export function UserProfile() {
             
             // Set streaming URL for signature image if it exists
             if (userData.signatureUrl) {
-              // Use streaming endpoint instead of presigned URL
-              setSignatureImageUrl(`/api/images/stream/${encodeURIComponent(userData.signatureUrl)}`);
+              // Use streaming endpoint instead of presigned URL (do not encode to preserve path)
+              setSignatureImageUrl(`/api/images/stream/${userData.signatureUrl}`);
             }
           }
           

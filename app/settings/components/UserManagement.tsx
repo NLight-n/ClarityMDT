@@ -130,9 +130,9 @@ export function UserManagement() {
         data
           .filter((u: any) => u.signatureUrl)
           .forEach((u: any) => {
-            // Use streaming endpoint directly
+            // Use streaming endpoint directly (do not encode to preserve path)
             signatureMap[u.id] = {
-              url: `/api/images/stream/${encodeURIComponent(u.signatureUrl)}`,
+              url: `/api/images/stream/${u.signatureUrl}`,
               authenticated: u.signatureAuthenticated,
             };
           });

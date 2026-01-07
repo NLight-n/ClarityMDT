@@ -34,7 +34,7 @@ export function RichTextEditor({
           ...node,
           attrs: {
             ...node.attrs,
-            src: `/api/images/stream/${encodeURIComponent(node.attrs.storageKey)}`,
+            src: `/api/images/stream/${node.attrs.storageKey}`,
           },
         };
       }
