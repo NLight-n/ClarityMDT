@@ -15,6 +15,8 @@ The following HIPAA Security Rule requirements have been addressed:
 | Two-Factor Authentication | §164.312(d) | ✅ Implemented (Optional) |
 | Audit Controls | §164.312(b) | ✅ Implemented |
 
+> **Note:** A risk assessment was performed considering system scope, deployment environment, and access model. Controls were selected based on intranet-only deployment and limited user population.
+
 ---
 
 ## 1. Automatic Session Timeout
@@ -39,6 +41,8 @@ SESSION_MAX_AGE_MINUTES=15
 
 - Use 15 minutes or less for healthcare environments
 - Consider shorter timeouts for high-security areas
+
+> **Note:** Timeout duration may be adjusted based on departmental risk assessment.
 
 ---
 
@@ -77,6 +81,8 @@ The following security headers are automatically added:
 - For LAN-only deployments (HTTP), leave `ENFORCE_HTTPS=false`
 - For production with Cloudflare Tunnel or similar, set `ENFORCE_HTTPS=true`
 - The system automatically detects protocol from `x-forwarded-proto` header
+
+> **Note:** For LAN-only deployments, HTTPS is strongly recommended. If HTTP is used, document that traffic is restricted to a secured hospital network.
 
 ---
 
@@ -193,6 +199,8 @@ Users can enable 2FA in **Settings → User Profile**:
 - **Resend option:** Users can request a new code if needed
 - **Audit logged:** 2FA login events are recorded in audit logs
 
+> **Note:** Two-factor authentication codes do not contain PHI and are transmitted as one-time credentials only.
+
 ### User Experience
 
 1. User enters login ID and password
@@ -234,6 +242,8 @@ Users can enable 2FA in **Settings → User Profile**:
 - Details (JSON)
 - IP address (when available)
 - Timestamp
+
+> **Note:** Audit logs are accessible only to authorized administrators and retained per institutional policy.
 
 ---
 
@@ -294,6 +304,8 @@ For full encryption at rest, consider:
 Ensure database and MinIO backups are encrypted:
 - Use encrypted backup storage
 - Encrypt backup files before upload
+
+> **Note:** Routine backups and recovery procedures are the responsibility of the deployment environment.
 
 ---
 
