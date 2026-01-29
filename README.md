@@ -24,6 +24,17 @@ A comprehensive Multi-Disciplinary Team (MDT) case management system for healthc
 - **Encrypted Settings**: Sensitive configuration (Telegram tokens, SMTP passwords) stored encrypted in database
 - **Hospital Branding**: Customizable hospital name and logo
 
+### 🔒 HIPAA Compliance
+Built-in security features for healthcare environments:
+- **Session Timeout**: Configurable auto-logout (default: 15 min)
+- **HTTPS Enforcement**: Optional redirect + HSTS headers
+- **PHI Encryption**: AES-256-GCM encryption for patient data at rest
+- **Rate Limiting**: Brute-force protection (lockout after 5 failed attempts)
+- **Two-Factor Authentication**: Optional 2FA via Telegram
+- **Audit Logging**: Comprehensive activity tracking
+
+> See [docs/HIPAA_COMPLIANCE.md](docs/HIPAA_COMPLIANCE.md) for detailed configuration.
+
 ## 🛠️ Tech Stack
 
 - **Frontend**: Next.js 15 (App Router), React 18, TypeScript
@@ -91,6 +102,12 @@ MINIO_SSL=false
 MINIO_ACCESS_KEY=minioadmin
 MINIO_SECRET_KEY=minioadmin
 MINIO_BUCKET=case-attachments
+
+# HIPAA Compliance (Optional)
+SESSION_MAX_AGE_MINUTES=15      # Session timeout in minutes
+ENFORCE_HTTPS=false             # Set to "true" for production
+ENABLE_PHI_ENCRYPTION=false     # Enable patient data encryption
+# PHI_ENCRYPTION_KEY=           # Optional: separate key for PHI (uses NEXTAUTH_SECRET if not set)
 ```
 
 **Important**: 

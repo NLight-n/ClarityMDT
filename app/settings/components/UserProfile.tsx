@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Save, X, CheckCircle2, AlertCircle, MessageSquare, Copy, Check } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Save, X, CheckCircle2, AlertCircle, MessageSquare, Copy, Check, Shield } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Role } from "@prisma/client";
@@ -50,6 +51,9 @@ export function UserProfile() {
   const [manualBotUsername, setManualBotUsername] = useState<string>("");
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [telegramEnabled, setTelegramEnabled] = useState<boolean | null>(null);
+  // Two-Factor Authentication state
+  const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [toggling2FA, setToggling2FA] = useState(false);
   const [messageDialog, setMessageDialog] = useState<{
     open: boolean;
     type: "success" | "error" | "info";
@@ -96,14 +100,15 @@ export function UserProfile() {
             setSignatureUrl(userData.signatureUrl || null);
             setSignatureAuthenticated(userData.signatureAuthenticated || false);
             setTelegramId(userData.telegramId || null);
-            
+            setTwoFactorEnabled(userData.twoFactorEnabled || false);
+
             // Set streaming URL for signature image if it exists
             if (userData.signatureUrl) {
               // Use streaming endpoint instead of presigned URL (do not encode to preserve path)
               setSignatureImageUrl(`/api/images/stream/${userData.signatureUrl}`);
             }
           }
-          
+
           // Check if Telegram is enabled
           const telegramResponse = await fetch("/api/profile/telegram/bot-info");
           if (telegramResponse.ok) {
@@ -127,11 +132,11 @@ export function UserProfile() {
   const handleSendManualCode = async () => {
     // Normalize input (remove @ if present, trim whitespace)
     const normalizedInput = manualTelegramId.trim().replace(/^@/, "");
-    
+
     // Validate: must be either numeric ID or valid username (5-32 chars, alphanumeric + underscore)
     const isNumericId = /^\d+$/.test(normalizedInput);
     const isValidUsername = /^[a-zA-Z0-9_]{5,32}$/.test(normalizedInput);
-    
+
     if (!normalizedInput || (!isNumericId && !isValidUsername)) {
       setMessageDialog({
         open: true,
@@ -247,7 +252,7 @@ export function UserProfile() {
         setVerificationCode(data.code);
         setBotUsername(data.botUsername);
         setCodeCopied(false);
-        
+
         // Start checking if Telegram was linked (poll every 3 seconds for max 10 minutes)
         startLinkStatusCheck();
       } else {
@@ -295,7 +300,7 @@ export function UserProfile() {
         const response = await fetch("/api/profile");
         if (response.ok) {
           const userData = await response.json();
-          
+
           // If Telegram ID is now set, stop checking and refresh UI
           if (userData.telegramId) {
             clearInterval(interval);
@@ -335,7 +340,7 @@ export function UserProfile() {
         console.error("Error stopping polling:", error);
       });
     }
-    
+
     // Cleanup on unmount
     return () => {
       if (linkCheckInterval) {
@@ -412,7 +417,7 @@ export function UserProfile() {
 
   const handleAuthenticateSignature = async () => {
     if (!session?.user?.id) return;
-    
+
     setAuthenticating(true);
     try {
       const response = await fetch(`/api/users/${session.user.id}/authenticate-signature`, {
@@ -452,7 +457,7 @@ export function UserProfile() {
 
   const handleSave = async (providedOldPassword?: string) => {
     setErrors({});
-    
+
     // Validate password if provided
     if (formData.password) {
       if (formData.password.length < 6) {
@@ -559,10 +564,10 @@ export function UserProfile() {
           // Increment failed attempts
           const newAttempts = passwordAttempts + 1;
           setPasswordAttempts(newAttempts);
-          
+
           // Keep dialog open and show error
           setOldPassword("");
-          
+
           // After 3 failed attempts, logout
           if (newAttempts >= 3) {
             setOldPasswordDialogOpen(false);
@@ -578,7 +583,7 @@ export function UserProfile() {
             }, 2000);
             return;
           }
-          
+
           const remainingAttempts = 3 - newAttempts;
           setMessageDialog({
             open: true,
@@ -633,786 +638,857 @@ export function UserProfile() {
 
   return (
     <>
-    <Card>
-      <CardHeader>
-        <CardTitle>User Profile</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <div className="flex items-center justify-center p-8">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Two Column Layout for Desktop */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left Column - Basic Information */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground">Basic Information</h3>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="name">
-                    Username <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) =>
-                      setFormData({ ...formData, name: e.target.value })
-                    }
-                    disabled={saving}
-                    placeholder="Enter your name"
-                  />
-                  {errors.name && (
-                    <p className="text-sm text-destructive">{errors.name}</p>
-                  )}
-                </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>User Profile</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Two Column Layout for Desktop */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Left Column - Basic Information */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-muted-foreground">Basic Information</h3>
 
-                <div className="space-y-2">
-                  <Label htmlFor="loginId">
-                    User ID <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="loginId"
-                    value={formData.loginId}
-                    onChange={(e) =>
-                      setFormData({ ...formData, loginId: e.target.value })
-                    }
-                    disabled={saving}
-                    placeholder="Enter user ID"
-                  />
-                  {errors.loginId && (
-                    <p className="text-sm text-destructive">{errors.loginId}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) =>
-                      setFormData({ ...formData, password: e.target.value })
-                    }
-                    disabled={saving}
-                    placeholder="Leave blank to keep current password"
-                  />
-                  {errors.password && (
-                    <p className="text-sm text-destructive">{errors.password}</p>
-                  )}
-                </div>
-
-                {formData.password && (
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">
-                      Confirm Password <span className="text-destructive">*</span>
+                    <Label htmlFor="name">
+                      Username <span className="text-destructive">*</span>
                     </Label>
                     <Input
-                      id="confirmPassword"
-                      type="password"
-                      value={formData.confirmPassword}
+                      id="name"
+                      value={formData.name}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          confirmPassword: e.target.value,
-                        })
+                        setFormData({ ...formData, name: e.target.value })
                       }
                       disabled={saving}
-                      placeholder="Confirm new password"
+                      placeholder="Enter your name"
                     />
-                    {errors.confirmPassword && (
-                      <p className="text-sm text-destructive">
-                        {errors.confirmPassword}
-                      </p>
+                    {errors.name && (
+                      <p className="text-sm text-destructive">{errors.name}</p>
                     )}
                   </div>
-                )}
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Role</Label>
-                  <div>
-                    <Badge variant="secondary" className="text-sm">
-                      {userRole}
-                    </Badge>
+                  <div className="space-y-2">
+                    <Label htmlFor="loginId">
+                      User ID <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="loginId"
+                      value={formData.loginId}
+                      onChange={(e) =>
+                        setFormData({ ...formData, loginId: e.target.value })
+                      }
+                      disabled={saving}
+                      placeholder="Enter user ID"
+                    />
+                    {errors.loginId && (
+                      <p className="text-sm text-destructive">{errors.loginId}</p>
+                    )}
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Department</Label>
-                  <div>
-                    <Badge variant="outline" className="text-sm">
-                      {displayDepartmentName}
-                    </Badge>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) =>
+                        setFormData({ ...formData, password: e.target.value })
+                      }
+                      disabled={saving}
+                      placeholder="Leave blank to keep current password"
+                    />
+                    {errors.password && (
+                      <p className="text-sm text-destructive">{errors.password}</p>
+                    )}
                   </div>
-                </div>
-              </div>
 
-              {/* Right Column - Optional Information */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-muted-foreground">Optional Information</h3>
-
-                {/* Telegram Section */}
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Telegram Notifications</Label>
-                  {telegramId ? (
+                  {formData.password && (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-green-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span className="text-sm">Account Linked</span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setUnlinkDialogOpen(true)}
-                        disabled={unlinkingTelegram}
-                        className="w-full"
-                      >
-                        {unlinkingTelegram ? (
-                          <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Unlinking...
-                          </>
-                        ) : (
-                          <>
-                            <X className="mr-2 h-4 w-4" />
-                            Unlink Telegram
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  ) : verificationCode && botUsername ? (
-                    <div className="space-y-3 p-3 border rounded-lg bg-blue-50">
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Click to open Telegram and link your account:
-                      </p>
-                      <a
-                        href={`https://t.me/${botUsername}?start=${verificationCode}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block"
-                      >
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" size="sm">
-                          <MessageSquare className="mr-2 h-4 w-4" />
-                          Open Telegram to Link
-                        </Button>
-                      </a>
-                      <div className="pt-2 border-t">
-                        <p className="text-xs text-muted-foreground mb-2">
-                          Or send this code to <strong>@{botUsername}</strong>:
+                      <Label htmlFor="confirmPassword">
+                        Confirm Password <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={formData.confirmPassword}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            confirmPassword: e.target.value,
+                          })
+                        }
+                        disabled={saving}
+                        placeholder="Confirm new password"
+                      />
+                      {errors.confirmPassword && (
+                        <p className="text-sm text-destructive">
+                          {errors.confirmPassword}
                         </p>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 px-2 py-1.5 bg-white border rounded font-mono text-sm font-bold text-center">
-                            {verificationCode}
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleCopyCode}
-                          >
-                            {codeCopied ? (
-                              <Check className="h-4 w-4" />
-                            ) : (
-                              <Copy className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                      {checkingLinkStatus && (
-                        <div className="flex items-center gap-2 text-xs text-blue-600">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          <span>Waiting for verification...</span>
-                        </div>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          console.log("[Cancel] Stopping Telegram polling...");
-                          
-                          // Clear client-side interval first
-                          if (linkCheckInterval) {
-                            clearInterval(linkCheckInterval);
-                            setLinkCheckInterval(null);
-                            console.log("[Cancel] Cleared client-side interval");
-                          }
-                          setCheckingLinkStatus(false);
-                          
-                          // Stop server-side polling immediately
-                          try {
-                            console.log("[Cancel] Calling stop-polling API...");
-                            const response = await fetch("/api/profile/telegram/stop-polling", { method: "POST" });
-                            if (response.ok) {
-                              const data = await response.json();
-                              console.log("[Cancel] Stop polling response:", data);
-                            } else {
-                              console.error("[Cancel] Stop polling failed:", response.status, await response.text());
-                            }
-                          } catch (error) {
-                            console.error("[Cancel] Error stopping polling:", error);
-                          }
-                          
-                          // Clear state
-                          setVerificationCode(null);
-                          setBotUsername("");
-                          console.log("[Cancel] Cleared verification state");
-                        }}
-                        className="w-full"
-                      >
-                        <X className="mr-2 h-4 w-4" />
-                        Cancel
-                      </Button>
                     </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {telegramEnabled === false ? (
-                        <div className="p-3 border rounded-lg bg-muted/50">
-                          <div className="flex items-start gap-2">
-                            <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                            <div className="space-y-1">
-                              <p className="text-sm font-medium text-muted-foreground">
-                                Telegram Linking is Disabled
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Telegram account linking is currently disabled or not configured. Please contact an administrator to enable Telegram linking.
-                              </p>
-                            </div>
-                          </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Role</Label>
+                    <div>
+                      <Badge variant="secondary" className="text-sm">
+                        {userRole}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Department</Label>
+                    <div>
+                      <Badge variant="outline" className="text-sm">
+                        {displayDepartmentName}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column - Optional Information */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-muted-foreground">Optional Information</h3>
+
+                  {/* Telegram Section */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Telegram Notifications</Label>
+                    {telegramId ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-sm">Account Linked</span>
                         </div>
-                      ) : !manualLinking ? (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleGenerateTelegramCode}
-                            disabled={generatingCode || !telegramEnabled}
-                            className="w-full"
-                          >
-                            {generatingCode ? (
-                              <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Generating...
-                              </>
-                            ) : (
-                              <>
-                                <MessageSquare className="mr-2 h-4 w-4" />
-                                Link Telegram Account (Bot)
-                              </>
-                            )}
-                          </Button>
-                          <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                              <span className="w-full border-t" />
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                              <span className="bg-background px-2 text-muted-foreground">Or</span>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={async () => {
-                              setManualLinking(true);
-                              // Fetch bot username and QR code when manual linking is enabled
-                              try {
-                                const response = await fetch("/api/profile/telegram/bot-info");
-                                if (response.ok) {
-                                  const data = await response.json();
-                                  setManualBotUsername(data.botUsername || "");
-                                  // Use QR preview endpoint if qrCodeUrl is provided
-                                  if (data.qrCodeUrl) {
-                                    // Check if it's a presigned URL (old data) or API endpoint
-                                    if (data.qrCodeUrl.includes('minio:9000') || data.qrCodeUrl.includes('X-Amz-')) {
-                                      // It's a presigned URL - can't use it, user needs to re-upload QR code
-                                      setQrCodeUrl(null);
-                                    } else if (data.qrCodeUrl.startsWith('/api/')) {
-                                      // It's already a relative API endpoint URL (from bot-info API)
-                                      setQrCodeUrl(data.qrCodeUrl);
-                                    } else if (data.qrCodeUrl.startsWith('http') && data.qrCodeUrl.includes('/api/')) {
-                                      // It's a full API endpoint URL
-                                      setQrCodeUrl(data.qrCodeUrl);
-                                    } else {
-                                      // It's a storage key - use the QR preview endpoint
-                                      setQrCodeUrl(`/api/profile/telegram/qr-preview/${data.qrCodeUrl}`);
-                                    }
-                                  } else {
-                                    setQrCodeUrl(null);
-                                  }
-                                  
-                                  // Check if Telegram is actually enabled
-                                  if (!data.botUsername) {
-                                    setMessageDialog({
-                                      open: true,
-                                      type: "error",
-                                      title: "Telegram Not Available",
-                                      message: "Telegram account linking is currently disabled or not configured. Please contact an administrator to enable Telegram linking.",
-                                    });
-                                    setManualLinking(false);
-                                  }
-                                }
-                              } catch (error) {
-                                console.error("Error fetching bot information:", error);
-                                setMessageDialog({
-                                  open: true,
-                                  type: "error",
-                                  title: "Error",
-                                  message: "Failed to fetch Telegram bot information. Please try again.",
-                                });
-                                setManualLinking(false);
-                              }
-                            }}
-                            disabled={!telegramEnabled}
-                            className="w-full"
-                          >
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setUnlinkDialogOpen(true)}
+                          disabled={unlinkingTelegram}
+                          className="w-full"
+                        >
+                          {unlinkingTelegram ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Unlinking...
+                            </>
+                          ) : (
+                            <>
+                              <X className="mr-2 h-4 w-4" />
+                              Unlink Telegram
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    ) : verificationCode && botUsername ? (
+                      <div className="space-y-3 p-3 border rounded-lg bg-blue-50">
+                        <p className="text-xs text-muted-foreground mb-2">
+                          Click to open Telegram and link your account:
+                        </p>
+                        <a
+                          href={`https://t.me/${botUsername}?start=${verificationCode}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block"
+                        >
+                          <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" size="sm">
                             <MessageSquare className="mr-2 h-4 w-4" />
-                            Link Manually (Enter Telegram ID)
+                            Open Telegram to Link
                           </Button>
-                        </>
-                      ) : (
-                        <div className="space-y-4 p-3 border rounded-lg bg-muted/50">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium">Manual Telegram Linking</Label>
+                        </a>
+                        <div className="pt-2 border-t">
+                          <p className="text-xs text-muted-foreground mb-2">
+                            Or send this code to <strong>@{botUsername}</strong>:
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 px-2 py-1.5 bg-white border rounded font-mono text-sm font-bold text-center">
+                              {verificationCode}
+                            </div>
                             <Button
-                              variant="ghost"
+                              variant="outline"
                               size="sm"
-                              onClick={() => {
-                                setManualLinking(false);
-                                setManualTelegramId("");
-                                setManualVerificationCode("");
-                                setCodeSent(false);
-                                setQrCodeUrl(null);
-                              }}
-                              className="h-6 w-6 p-0"
+                              onClick={handleCopyCode}
                             >
-                              <X className="h-4 w-4" />
+                              {codeCopied ? (
+                                <Check className="h-4 w-4" />
+                              ) : (
+                                <Copy className="h-4 w-4" />
+                              )}
                             </Button>
                           </div>
-                          
-                          {/* Step 1: Instructions to start bot conversation */}
-                          <div className="p-3 bg-background rounded-md border">
-                            <Label className="text-xs font-semibold block mb-3">Step 1: Start Bot Conversation</Label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* Left column: Instructions */}
-                              <div className="space-y-3">
-                                <div className="space-y-2">
-                                  <p className="text-xs font-medium text-foreground">Option 1: Search for Bot</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {manualBotUsername ? (
-                                      <>Search for <strong>@{manualBotUsername}</strong> on Telegram and click &quot;Start&quot;.</>
-                                    ) : (
-                                      <>Search for the bot on Telegram and click &quot;Start&quot;.</>
-                                    )}
-                                  </p>
-                                </div>
-                                <div className="space-y-2">
-                                  <p className="text-xs font-medium text-foreground">Option 2: Scan QR Code</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Open Telegram → Click New chat → New contact → Add via QR code → Scan this QR code → Click Message → Press &quot;Start&quot; button
-                                  </p>
-                                </div>
-                              </div>
-                              {/* Right column: QR Code */}
-                              <div className="flex justify-center items-start">
-                                {qrCodeUrl ? (
-                                  <img
-                                    src={qrCodeUrl}
-                                    alt="Telegram Bot QR Code"
-                                    className="h-48 w-48 border-2 border-gray-300 rounded-lg object-contain bg-white p-2"
-                                  />
-                                ) : (
-                                  <div className="flex items-center justify-center h-48 w-48 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-                                    <p className="text-xs text-muted-foreground text-center px-4">
-                                      QR code not available
-                                    </p>
-                                  </div>
-                                )}
+                        </div>
+                        {checkingLinkStatus && (
+                          <div className="flex items-center gap-2 text-xs text-blue-600">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            <span>Waiting for verification...</span>
+                          </div>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            console.log("[Cancel] Stopping Telegram polling...");
+
+                            // Clear client-side interval first
+                            if (linkCheckInterval) {
+                              clearInterval(linkCheckInterval);
+                              setLinkCheckInterval(null);
+                              console.log("[Cancel] Cleared client-side interval");
+                            }
+                            setCheckingLinkStatus(false);
+
+                            // Stop server-side polling immediately
+                            try {
+                              console.log("[Cancel] Calling stop-polling API...");
+                              const response = await fetch("/api/profile/telegram/stop-polling", { method: "POST" });
+                              if (response.ok) {
+                                const data = await response.json();
+                                console.log("[Cancel] Stop polling response:", data);
+                              } else {
+                                console.error("[Cancel] Stop polling failed:", response.status, await response.text());
+                              }
+                            } catch (error) {
+                              console.error("[Cancel] Error stopping polling:", error);
+                            }
+
+                            // Clear state
+                            setVerificationCode(null);
+                            setBotUsername("");
+                            console.log("[Cancel] Cleared verification state");
+                          }}
+                          className="w-full"
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {telegramEnabled === false ? (
+                          <div className="p-3 border rounded-lg bg-muted/50">
+                            <div className="flex items-start gap-2">
+                              <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                              <div className="space-y-1">
+                                <p className="text-sm font-medium text-muted-foreground">
+                                  Telegram Linking is Disabled
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Telegram account linking is currently disabled or not configured. Please contact an administrator to enable Telegram linking.
+                                </p>
                               </div>
                             </div>
                           </div>
-
-                          {/* Step 2: Enter Telegram username/ID */}
-                          <div className="space-y-2">
-                            <Label htmlFor="manualTelegramId" className="text-xs font-semibold">
-                              Step 2: Enter @username or numeric ID
-                            </Label>
-                            <Input
-                              id="manualTelegramId"
-                              type="text"
-                              placeholder="Enter @username or numeric ID"
-                              value={manualTelegramId}
-                              onChange={(e) => setManualTelegramId(e.target.value)}
-                              disabled={codeSent || sendingCode || verifyingCode}
-                              className="font-mono text-sm"
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              Enter your Telegram username (e.g., @username) or numeric ID. You can find your numeric ID by messaging @userinfobot on Telegram.
-                            </p>
-                          </div>
-
-                          {/* Step 3: Send Verification Code */}
-                          {!codeSent ? (
+                        ) : !manualLinking ? (
+                          <>
                             <Button
-                              variant="default"
+                              variant="outline"
                               size="sm"
-                              onClick={handleSendManualCode}
-                              disabled={!manualTelegramId || sendingCode}
+                              onClick={handleGenerateTelegramCode}
+                              disabled={generatingCode || !telegramEnabled}
                               className="w-full"
                             >
-                              {sendingCode ? (
+                              {generatingCode ? (
                                 <>
                                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  Sending Code...
+                                  Generating...
                                 </>
                               ) : (
                                 <>
                                   <MessageSquare className="mr-2 h-4 w-4" />
-                                  Send Verification Code
+                                  Link Telegram Account (Bot)
                                 </>
                               )}
                             </Button>
-                          ) : (
-                            <>
-                              <div className="space-y-2">
-                                <Label htmlFor="manualVerificationCode" className="text-xs">
-                                  Verification Code
-                                </Label>
-                                <Input
-                                  id="manualVerificationCode"
-                                  type="text"
-                                  placeholder="Enter the code you received"
-                                  value={manualVerificationCode}
-                                  onChange={(e) => setManualVerificationCode(e.target.value.toUpperCase())}
-                                  disabled={verifyingCode}
-                                  className="font-mono text-sm text-center text-lg tracking-widest"
-                                  maxLength={8}
-                                />
-                                <p className="text-xs text-muted-foreground">
-                                  Check your Telegram messages for the verification code
-                                </p>
+                            <div className="relative">
+                              <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t" />
                               </div>
+                              <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-background px-2 text-muted-foreground">Or</span>
+                              </div>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                setManualLinking(true);
+                                // Fetch bot username and QR code when manual linking is enabled
+                                try {
+                                  const response = await fetch("/api/profile/telegram/bot-info");
+                                  if (response.ok) {
+                                    const data = await response.json();
+                                    setManualBotUsername(data.botUsername || "");
+                                    // Use QR preview endpoint if qrCodeUrl is provided
+                                    if (data.qrCodeUrl) {
+                                      // Check if it's a presigned URL (old data) or API endpoint
+                                      if (data.qrCodeUrl.includes('minio:9000') || data.qrCodeUrl.includes('X-Amz-')) {
+                                        // It's a presigned URL - can't use it, user needs to re-upload QR code
+                                        setQrCodeUrl(null);
+                                      } else if (data.qrCodeUrl.startsWith('/api/')) {
+                                        // It's already a relative API endpoint URL (from bot-info API)
+                                        setQrCodeUrl(data.qrCodeUrl);
+                                      } else if (data.qrCodeUrl.startsWith('http') && data.qrCodeUrl.includes('/api/')) {
+                                        // It's a full API endpoint URL
+                                        setQrCodeUrl(data.qrCodeUrl);
+                                      } else {
+                                        // It's a storage key - use the QR preview endpoint
+                                        setQrCodeUrl(`/api/profile/telegram/qr-preview/${data.qrCodeUrl}`);
+                                      }
+                                    } else {
+                                      setQrCodeUrl(null);
+                                    }
+
+                                    // Check if Telegram is actually enabled
+                                    if (!data.botUsername) {
+                                      setMessageDialog({
+                                        open: true,
+                                        type: "error",
+                                        title: "Telegram Not Available",
+                                        message: "Telegram account linking is currently disabled or not configured. Please contact an administrator to enable Telegram linking.",
+                                      });
+                                      setManualLinking(false);
+                                    }
+                                  }
+                                } catch (error) {
+                                  console.error("Error fetching bot information:", error);
+                                  setMessageDialog({
+                                    open: true,
+                                    type: "error",
+                                    title: "Error",
+                                    message: "Failed to fetch Telegram bot information. Please try again.",
+                                  });
+                                  setManualLinking(false);
+                                }
+                              }}
+                              disabled={!telegramEnabled}
+                              className="w-full"
+                            >
+                              <MessageSquare className="mr-2 h-4 w-4" />
+                              Link Manually (Enter Telegram ID)
+                            </Button>
+                          </>
+                        ) : (
+                          <div className="space-y-4 p-3 border rounded-lg bg-muted/50">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-sm font-medium">Manual Telegram Linking</Label>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setManualLinking(false);
+                                  setManualTelegramId("");
+                                  setManualVerificationCode("");
+                                  setCodeSent(false);
+                                  setQrCodeUrl(null);
+                                }}
+                                className="h-6 w-6 p-0"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+
+                            {/* Step 1: Instructions to start bot conversation */}
+                            <div className="p-3 bg-background rounded-md border">
+                              <Label className="text-xs font-semibold block mb-3">Step 1: Start Bot Conversation</Label>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Left column: Instructions */}
+                                <div className="space-y-3">
+                                  <div className="space-y-2">
+                                    <p className="text-xs font-medium text-foreground">Option 1: Search for Bot</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {manualBotUsername ? (
+                                        <>Search for <strong>@{manualBotUsername}</strong> on Telegram and click &quot;Start&quot;.</>
+                                      ) : (
+                                        <>Search for the bot on Telegram and click &quot;Start&quot;.</>
+                                      )}
+                                    </p>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <p className="text-xs font-medium text-foreground">Option 2: Scan QR Code</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Open Telegram → Click New chat → New contact → Add via QR code → Scan this QR code → Click Message → Press &quot;Start&quot; button
+                                    </p>
+                                  </div>
+                                </div>
+                                {/* Right column: QR Code */}
+                                <div className="flex justify-center items-start">
+                                  {qrCodeUrl ? (
+                                    <img
+                                      src={qrCodeUrl}
+                                      alt="Telegram Bot QR Code"
+                                      className="h-48 w-48 border-2 border-gray-300 rounded-lg object-contain bg-white p-2"
+                                    />
+                                  ) : (
+                                    <div className="flex items-center justify-center h-48 w-48 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                                      <p className="text-xs text-muted-foreground text-center px-4">
+                                        QR code not available
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Step 2: Enter Telegram username/ID */}
+                            <div className="space-y-2">
+                              <Label htmlFor="manualTelegramId" className="text-xs font-semibold">
+                                Step 2: Enter @username or numeric ID
+                              </Label>
+                              <Input
+                                id="manualTelegramId"
+                                type="text"
+                                placeholder="Enter @username or numeric ID"
+                                value={manualTelegramId}
+                                onChange={(e) => setManualTelegramId(e.target.value)}
+                                disabled={codeSent || sendingCode || verifyingCode}
+                                className="font-mono text-sm"
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                Enter your Telegram username (e.g., @username) or numeric ID. You can find your numeric ID by messaging @userinfobot on Telegram.
+                              </p>
+                            </div>
+
+                            {/* Step 3: Send Verification Code */}
+                            {!codeSent ? (
                               <Button
                                 variant="default"
                                 size="sm"
-                                onClick={handleVerifyManualCode}
-                                disabled={!manualVerificationCode || verifyingCode || manualVerificationCode.length !== 8}
-                                className="w-full"
-                              >
-                                {verifyingCode ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Verifying...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                    Verify & Link
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
                                 onClick={handleSendManualCode}
-                                disabled={sendingCode}
+                                disabled={!manualTelegramId || sendingCode}
                                 className="w-full"
                               >
                                 {sendingCode ? (
                                   <>
                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Resending...
+                                    Sending Code...
                                   </>
                                 ) : (
-                                  "Resend Code"
+                                  <>
+                                    <MessageSquare className="mr-2 h-4 w-4" />
+                                    Send Verification Code
+                                  </>
                                 )}
                               </Button>
-                            </>
-                          )}
+                            ) : (
+                              <>
+                                <div className="space-y-2">
+                                  <Label htmlFor="manualVerificationCode" className="text-xs">
+                                    Verification Code
+                                  </Label>
+                                  <Input
+                                    id="manualVerificationCode"
+                                    type="text"
+                                    placeholder="Enter the code you received"
+                                    value={manualVerificationCode}
+                                    onChange={(e) => setManualVerificationCode(e.target.value.toUpperCase())}
+                                    disabled={verifyingCode}
+                                    className="font-mono text-sm text-center text-lg tracking-widest"
+                                    maxLength={8}
+                                  />
+                                  <p className="text-xs text-muted-foreground">
+                                    Check your Telegram messages for the verification code
+                                  </p>
+                                </div>
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={handleVerifyManualCode}
+                                  disabled={!manualVerificationCode || verifyingCode || manualVerificationCode.length !== 8}
+                                  className="w-full"
+                                >
+                                  {verifyingCode ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Verifying...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                                      Verify & Link
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={handleSendManualCode}
+                                  disabled={sendingCode}
+                                  className="w-full"
+                                >
+                                  {sendingCode ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Resending...
+                                    </>
+                                  ) : (
+                                    "Resend Code"
+                                  )}
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Two-Factor Authentication Section - Only show when Telegram is linked */}
+                  {telegramId && (
+                    <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Shield className="h-4 w-4 text-primary" />
+                          <Label htmlFor="twoFactorEnabled" className="text-sm font-medium cursor-pointer">
+                            Two-Factor Authentication
+                          </Label>
+                        </div>
+                        <Switch
+                          id="twoFactorEnabled"
+                          checked={twoFactorEnabled}
+                          disabled={toggling2FA}
+                          onCheckedChange={async (checked) => {
+                            setToggling2FA(true);
+                            try {
+                              const response = await fetch("/api/profile/two-factor", {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ enabled: checked }),
+                              });
+
+                              if (response.ok) {
+                                const data = await response.json();
+                                setTwoFactorEnabled(data.twoFactorEnabled);
+                                setMessageDialog({
+                                  open: true,
+                                  type: "success",
+                                  title: checked ? "2FA Enabled" : "2FA Disabled",
+                                  message: checked
+                                    ? "Two-factor authentication is now enabled. You will receive a verification code on Telegram when logging in."
+                                    : "Two-factor authentication has been disabled.",
+                                });
+                              } else {
+                                const error = await response.json();
+                                setMessageDialog({
+                                  open: true,
+                                  type: "error",
+                                  title: "Error",
+                                  message: error.error || "Failed to update 2FA settings",
+                                });
+                              }
+                            } catch (error) {
+                              console.error("Error toggling 2FA:", error);
+                              setMessageDialog({
+                                open: true,
+                                type: "error",
+                                title: "Error",
+                                message: "An error occurred. Please try again.",
+                              });
+                            } finally {
+                              setToggling2FA(false);
+                            }
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {twoFactorEnabled
+                          ? "You will receive a verification code on Telegram each time you log in."
+                          : "Enable to require a verification code from Telegram when logging in."}
+                      </p>
+                      {toggling2FA && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          <span>Updating...</span>
                         </div>
                       )}
                     </div>
                   )}
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumber">Phone Number</Label>
-                  <Input
-                    id="phoneNumber"
-                    type="tel"
-                    value={formData.phoneNumber}
-                    onChange={(e) =>
-                      setFormData({ ...formData, phoneNumber: e.target.value })
-                    }
-                    disabled={saving}
-                    placeholder="Enter phone number"
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phoneNumber">Phone Number</Label>
+                    <Input
+                      id="phoneNumber"
+                      type="tel"
+                      value={formData.phoneNumber}
+                      onChange={(e) =>
+                        setFormData({ ...formData, phoneNumber: e.target.value })
+                      }
+                      disabled={saving}
+                      placeholder="Enter phone number"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email ID</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) =>
-                      setFormData({ ...formData, email: e.target.value })
-                    }
-                    disabled={saving}
-                    placeholder="Enter email address"
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email ID</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      disabled={saving}
+                      placeholder="Enter email address"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="medicalCouncilNumber">Medical Council Registration Number</Label>
-                  <Input
-                    id="medicalCouncilNumber"
-                    value={formData.medicalCouncilNumber}
-                    onChange={(e) =>
-                      setFormData({ ...formData, medicalCouncilNumber: e.target.value })
-                    }
-                    disabled={saving}
-                    placeholder="Enter registration number"
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="medicalCouncilNumber">Medical Council Registration Number</Label>
+                    <Input
+                      id="medicalCouncilNumber"
+                      value={formData.medicalCouncilNumber}
+                      onChange={(e) =>
+                        setFormData({ ...formData, medicalCouncilNumber: e.target.value })
+                      }
+                      disabled={saving}
+                      placeholder="Enter registration number"
+                    />
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="degrees">Degree/s</Label>
-                  <Input
-                    id="degrees"
-                    value={formData.degrees}
-                    onChange={(e) =>
-                      setFormData({ ...formData, degrees: e.target.value })
-                    }
-                    disabled={saving}
-                    placeholder="e.g., MBBS, MD, DM"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="degrees">Degree/s</Label>
+                    <Input
+                      id="degrees"
+                      value={formData.degrees}
+                      onChange={(e) =>
+                        setFormData({ ...formData, degrees: e.target.value })
+                      }
+                      disabled={saving}
+                      placeholder="e.g., MBBS, MD, DM"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Digital Signature Section */}
-            {(signatureUrl || (session?.user?.role === Role.Consultant || session?.user?.role === Role.Coordinator)) && (
-              <div className="space-y-4 border-t pt-6">
-                <div>
-                  <Label className="text-sm font-medium">Digital Signature</Label>
-                  {signatureUrl ? (
-                    <div className="mt-2 space-y-3">
-                      <div className="flex items-center gap-2">
-                        {signatureImageUrl && (
-                          <div className="border rounded p-2 bg-gray-50">
-                            <img
-                              src={signatureImageUrl}
-                              alt="Your signature"
-                              className="h-16 object-contain"
-                              onError={() => setSignatureImageUrl(null)}
-                            />
-                          </div>
-                        )}
-                        <div className="flex-1">
-                          {signatureAuthenticated ? (
-                            <div className="flex items-center gap-2 text-green-600">
-                              <CheckCircle2 className="h-5 w-5" />
-                              <span className="text-sm font-medium">Signature Authenticated</span>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <div className="flex items-center gap-2 text-amber-600">
-                                <AlertCircle className="h-5 w-5" />
-                                <span className="text-sm font-medium">Signature Pending Authentication</span>
-                              </div>
-                              <p className="text-xs text-muted-foreground">
-                                Please review and authenticate your signature to use it in PDF reports.
-                              </p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleAuthenticateSignature}
-                                disabled={authenticating}
-                              >
-                                {authenticating ? (
-                                  <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Authenticating...
-                                  </>
-                                ) : (
-                                  <>
-                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                    Authenticate Signature
-                                  </>
-                                )}
-                              </Button>
+              {/* Digital Signature Section */}
+              {(signatureUrl || (session?.user?.role === Role.Consultant || session?.user?.role === Role.Coordinator)) && (
+                <div className="space-y-4 border-t pt-6">
+                  <div>
+                    <Label className="text-sm font-medium">Digital Signature</Label>
+                    {signatureUrl ? (
+                      <div className="mt-2 space-y-3">
+                        <div className="flex items-center gap-2">
+                          {signatureImageUrl && (
+                            <div className="border rounded p-2 bg-gray-50">
+                              <img
+                                src={signatureImageUrl}
+                                alt="Your signature"
+                                className="h-16 object-contain"
+                                onError={() => setSignatureImageUrl(null)}
+                              />
                             </div>
                           )}
+                          <div className="flex-1">
+                            {signatureAuthenticated ? (
+                              <div className="flex items-center gap-2 text-green-600">
+                                <CheckCircle2 className="h-5 w-5" />
+                                <span className="text-sm font-medium">Signature Authenticated</span>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 text-amber-600">
+                                  <AlertCircle className="h-5 w-5" />
+                                  <span className="text-sm font-medium">Signature Pending Authentication</span>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  Please review and authenticate your signature to use it in PDF reports.
+                                </p>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={handleAuthenticateSignature}
+                                  disabled={authenticating}
+                                >
+                                  {authenticating ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Authenticating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                                      Authenticate Signature
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="mt-2">
-                      <p className="text-sm text-muted-foreground">
-                        No signature uploaded. Please contact an administrator to upload your signature.
-                      </p>
-                    </div>
-                  )}
+                    ) : (
+                      <div className="mt-2">
+                        <p className="text-sm text-muted-foreground">
+                          No signature uploaded. Please contact an administrator to upload your signature.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
 
-            {/* Action Buttons */}
-            <div className="flex gap-2 pt-4 border-t">
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  // Reset form
-                  if (session?.user?.id) {
-                    try {
-                      const response = await fetch(`/api/profile`);
-                      if (response.ok) {
-                        const userData = await response.json();
-                        setFormData({
-                          name: userData.name || "",
-                          loginId: userData.loginId || "",
-                          password: "",
-                          confirmPassword: "",
-                          phoneNumber: userData.phoneNumber || "",
-                          email: userData.email || "",
-                          medicalCouncilNumber: userData.medicalCouncilNumber || "",
-                          degrees: userData.degrees || "",
-                        });
-                        setDepartmentName(userData.department?.name || null);
-                        setTelegramId(userData.telegramId || null);
-                        setErrors({});
+              {/* Action Buttons */}
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    // Reset form
+                    if (session?.user?.id) {
+                      try {
+                        const response = await fetch(`/api/profile`);
+                        if (response.ok) {
+                          const userData = await response.json();
+                          setFormData({
+                            name: userData.name || "",
+                            loginId: userData.loginId || "",
+                            password: "",
+                            confirmPassword: "",
+                            phoneNumber: userData.phoneNumber || "",
+                            email: userData.email || "",
+                            medicalCouncilNumber: userData.medicalCouncilNumber || "",
+                            degrees: userData.degrees || "",
+                          });
+                          setDepartmentName(userData.department?.name || null);
+                          setTelegramId(userData.telegramId || null);
+                          setErrors({});
+                        }
+                      } catch (error) {
+                        console.error("Error resetting form:", error);
                       }
-                    } catch (error) {
-                      console.error("Error resetting form:", error);
                     }
-                  }
-                }}
-                disabled={saving}
-                className="flex-1"
-              >
-                <X className="mr-2 h-4 w-4" />
-                Reset
-              </Button>
-              <Button
-                onClick={() => handleSave()}
-                disabled={saving}
-                className="flex-1"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Saving...
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save
-                  </>
-                )}
-              </Button>
+                  }}
+                  disabled={saving}
+                  className="flex-1"
+                >
+                  <X className="mr-2 h-4 w-4" />
+                  Reset
+                </Button>
+                <Button
+                  onClick={() => handleSave()}
+                  disabled={saving}
+                  className="flex-1"
+                >
+                  {saving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="mr-2 h-4 w-4" />
+                      Save
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </CardContent>
+      </Card>
 
-    <AlertDialog open={unlinkDialogOpen} onOpenChange={setUnlinkDialogOpen}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Unlink Telegram Account?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to unlink your Telegram account? You will no longer receive notifications via Telegram.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleUnlinkTelegram}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            disabled={unlinkingTelegram}
-          >
-            {unlinkingTelegram ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Unlinking...
-              </>
-            ) : (
-              "Unlink"
-            )}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      <AlertDialog open={unlinkDialogOpen} onOpenChange={setUnlinkDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlink Telegram Account?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to unlink your Telegram account? You will no longer receive notifications via Telegram.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUnlinkTelegram}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={unlinkingTelegram}
+            >
+              {unlinkingTelegram ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Unlinking...
+                </>
+              ) : (
+                "Unlink"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-    <AlertDialog 
-      open={oldPasswordDialogOpen} 
-      onOpenChange={() => {
-        // Prevent closing the dialog - no close button or outside click
-        // Only allow closing after successful password change or logout
-      }}
-    >
-      <AlertDialogContent 
-        onEscapeKeyDown={(e) => {
-          // Prevent closing with ESC key
-          e.preventDefault();
+      <AlertDialog
+        open={oldPasswordDialogOpen}
+        onOpenChange={() => {
+          // Prevent closing the dialog - no close button or outside click
+          // Only allow closing after successful password change or logout
         }}
       >
-        <AlertDialogHeader>
-          <AlertDialogTitle>Verify Current Password</AlertDialogTitle>
-          <AlertDialogDescription>
-            Please enter your current password to confirm the password change. This helps protect your account from unauthorized changes.
-            {passwordAttempts > 0 && (
-              <span className="block mt-2 text-destructive font-medium">
-                {passwordAttempts} failed attempt{passwordAttempts !== 1 ? 's' : ''}. {3 - passwordAttempts} attempt{3 - passwordAttempts !== 1 ? 's' : ''} remaining.
-              </span>
-            )}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <div className="py-4">
-          <div className="space-y-2">
-            <Label htmlFor="oldPassword">Current Password</Label>
-            <Input
-              id="oldPassword"
-              type="password"
-              value={oldPassword}
-              onChange={(e) => setOldPassword(e.target.value)}
-              disabled={verifyingOldPassword || saving}
-              placeholder="Enter your current password"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && oldPassword.trim() && !verifyingOldPassword && !saving) {
-                  handleOldPasswordSubmit();
-                }
-              }}
-              autoFocus
-            />
+        <AlertDialogContent
+          onEscapeKeyDown={(e) => {
+            // Prevent closing with ESC key
+            e.preventDefault();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Verify Current Password</AlertDialogTitle>
+            <AlertDialogDescription>
+              Please enter your current password to confirm the password change. This helps protect your account from unauthorized changes.
+              {passwordAttempts > 0 && (
+                <span className="block mt-2 text-destructive font-medium">
+                  {passwordAttempts} failed attempt{passwordAttempts !== 1 ? 's' : ''}. {3 - passwordAttempts} attempt{3 - passwordAttempts !== 1 ? 's' : ''} remaining.
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+            <div className="space-y-2">
+              <Label htmlFor="oldPassword">Current Password</Label>
+              <Input
+                id="oldPassword"
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                disabled={verifyingOldPassword || saving}
+                placeholder="Enter your current password"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && oldPassword.trim() && !verifyingOldPassword && !saving) {
+                    handleOldPasswordSubmit();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
           </div>
-        </div>
-        <AlertDialogFooter>
-          <AlertDialogAction
-            onClick={handleOldPasswordSubmit}
-            disabled={verifyingOldPassword || saving || !oldPassword.trim()}
-            className="w-full"
-          >
-            {verifyingOldPassword || saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Verifying...
-              </>
-            ) : (
-              "Verify & Save"
-            )}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={handleOldPasswordSubmit}
+              disabled={verifyingOldPassword || saving || !oldPassword.trim()}
+              className="w-full"
+            >
+              {verifyingOldPassword || saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Verify & Save"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-    <MessageDialog
-      open={messageDialog.open}
-      onOpenChange={(open) => setMessageDialog((prev) => ({ ...prev, open }))}
-      type={messageDialog.type}
-      title={messageDialog.title}
-      message={messageDialog.message}
-    />
+      <MessageDialog
+        open={messageDialog.open}
+        onOpenChange={(open) => setMessageDialog((prev) => ({ ...prev, open }))}
+        type={messageDialog.type}
+        title={messageDialog.title}
+        message={messageDialog.message}
+      />
     </>
   );
 }

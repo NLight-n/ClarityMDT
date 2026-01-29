@@ -85,6 +85,9 @@ model User {
   // Telegram notification
   telegramId String? // Telegram user ID for notifications
 
+  // Two-Factor Authentication (via Telegram)
+  twoFactorEnabled Boolean @default(false) // Only effective when telegramId is set
+
   department          Department?          @relation(fields: [departmentId], references: [id])
   createdCases        Case[]               @relation("CaseCreator")
   specialistsOpinions SpecialistsOpinion[]
@@ -94,6 +97,7 @@ model User {
   consensusReports     ConsensusReport[]     @relation("ConsensusCreator")
   auditLogs            AuditLog[]
   telegramVerification TelegramVerification?
+  twoFactorCodes       TwoFactorCode[]
   notifications        Notification[]
   backups              Backup[]
 
@@ -335,4 +339,19 @@ model Notification {
 
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+model TwoFactorCode {
+  id        String   @id @default(uuid())
+  userId    String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  used      Boolean  @default(false)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, code])
+  @@index([expiresAt])
+  @@map("two_factor_codes")
 }

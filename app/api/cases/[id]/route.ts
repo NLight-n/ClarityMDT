@@ -6,6 +6,7 @@ import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
 import { CaseStatus, Gender, NotificationType } from "@prisma/client";
 import { z } from "zod";
 import { createNotificationsForUsers } from "@/lib/notifications/createNotification";
+import { encryptCaseData, decryptCaseData } from "@/lib/security/phiCaseWrapper";
 
 const updateCaseSchema = z.object({
   patientName: z.string().min(1).optional(),
@@ -161,7 +162,10 @@ export async function GET(
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
-    return NextResponse.json(caseRecord);
+    // HIPAA Compliance: Decrypt PHI fields before returning
+    const decryptedCase = decryptCaseData(caseRecord);
+
+    return NextResponse.json(decryptedCase);
   } catch (error) {
     console.error("Error fetching case:", error);
     return NextResponse.json(
@@ -271,7 +275,7 @@ export async function PATCH(
 
     // Prepare update data
     const updateData: any = {};
-    
+
     // Status logic per requirements:
     // - Unassigned cases = DRAFT
     // - Cases assigned to meeting = SUBMITTED (if currently DRAFT or PENDING) or keep current status
@@ -294,8 +298,16 @@ export async function PATCH(
         updateData.status = CaseStatus.DRAFT;
       }
     }
-    if (validatedData.patientName !== undefined) updateData.patientName = validatedData.patientName;
-    if (validatedData.mrn !== undefined) updateData.mrn = validatedData.mrn;
+
+    // HIPAA Compliance: Encrypt PHI fields if provided
+    if (validatedData.patientName !== undefined || validatedData.mrn !== undefined) {
+      const encryptedData = encryptCaseData({
+        patientName: validatedData.patientName,
+        mrn: validatedData.mrn,
+      });
+      if (validatedData.patientName !== undefined) updateData.patientName = encryptedData.patientName;
+      if (validatedData.mrn !== undefined) updateData.mrn = encryptedData.mrn;
+    }
     if (validatedData.age !== undefined) updateData.age = validatedData.age;
     if (validatedData.gender !== undefined) updateData.gender = validatedData.gender;
     if (validatedData.presentingDepartmentId !== undefined) {
@@ -451,12 +463,12 @@ export async function DELETE(
     // Get the existing case
     const existingCase = await prisma.case.findUnique({
       where: { id },
-      select: { 
-        id: true, 
+      select: {
+        id: true,
         patientName: true,
         mrn: true,
-        status: true, 
-        createdById: true 
+        status: true,
+        createdById: true
       },
     });
 
@@ -467,7 +479,7 @@ export async function DELETE(
     // Check permissions: Only creator, coordinator, or admin can delete cases
     const isCreator = existingCase.createdById === user.id;
     const isCoord = isCoordinator(user);
-    
+
     if (!isCreator && !isCoord) {
       return NextResponse.json(
         { error: "Only the creator, coordinator, or admin can delete cases" },

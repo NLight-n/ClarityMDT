@@ -2,8 +2,27 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+/**
+ * HIPAA Compliance Middleware
+ * - HTTPS enforcement (configurable)
+ * - Session validation
+ * - Security headers
+ */
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // HIPAA Compliance: HTTPS Enforcement
+  // Enable via ENFORCE_HTTPS=true in production
+  // This redirects HTTP to HTTPS when enabled
+  const enforceHttps = process.env.ENFORCE_HTTPS === "true";
+  const protocol = request.headers.get("x-forwarded-proto") ||
+    (request.url.startsWith("https") ? "https" : "http");
+
+  if (enforceHttps && protocol === "http") {
+    const httpsUrl = new URL(request.url);
+    httpsUrl.protocol = "https:";
+    return NextResponse.redirect(httpsUrl.toString(), 301);
+  }
 
   // Allow access to login page, setup page, and API auth routes
   // Also allow public API routes that don't require authentication
@@ -16,7 +35,17 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico")
   ) {
-    return NextResponse.next();
+    const response = NextResponse.next();
+
+    // Add HSTS header for HTTPS connections
+    if (protocol === "https") {
+      response.headers.set(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains"
+      );
+    }
+
+    return response;
   }
 
   // Ensure NEXTAUTH_SECRET is available
@@ -27,7 +56,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Get token from request - this validates the session cookie
-  const token = await getToken({ 
+  const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
     cookieName: "next-auth.session-token",
@@ -35,7 +64,7 @@ export async function middleware(request: NextRequest) {
 
   // Strict validation: token must exist AND have all required fields with valid values
   // This prevents access with partial, expired, or invalid tokens
-  const hasValidToken = 
+  const hasValidToken =
     token !== null &&
     token !== undefined &&
     typeof token === "object" &&
@@ -47,29 +76,39 @@ export async function middleware(request: NextRequest) {
   if (!hasValidToken) {
     const loginUrl = new URL("/login", request.url);
     const response = NextResponse.redirect(loginUrl);
-    
+
     // Clear all possible session cookie variants to prevent stale cookies
     // This ensures clean state when switching between LAN and tunnel
     response.cookies.delete("next-auth.session-token");
     response.cookies.delete("__Secure-next-auth.session-token");
     response.cookies.delete("next-auth.csrf-token");
     response.cookies.delete("__Host-next-auth.csrf-token");
-    
+
     // Explicitly set cookies to expire to clear them
     const cookieOptions = {
       path: "/",
       maxAge: 0,
       expires: new Date(0),
     };
-    
+
     // Clear session token
     response.cookies.set("next-auth.session-token", "", cookieOptions);
     response.cookies.set("__Secure-next-auth.session-token", "", cookieOptions);
-    
+
     return response;
   }
 
-  return NextResponse.next();
+  const response = NextResponse.next();
+
+  // Add HSTS header for authenticated HTTPS connections
+  if (protocol === "https") {
+    response.headers.set(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains"
+    );
+  }
+
+  return response;
 }
 
 export const config = {

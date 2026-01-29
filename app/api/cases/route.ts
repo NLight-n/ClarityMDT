@@ -4,6 +4,7 @@ import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canViewCase, isCoordinator, isConsultant, isAdmin } from "@/lib/permissions/accessControl";
 import { CaseStatus, Gender } from "@prisma/client";
 import { z } from "zod";
+import { encryptCaseData, decryptCaseDataArray } from "@/lib/security/phiCaseWrapper";
 
 const createCaseSchema = z.object({
   patientName: z.string().min(1, "Patient name is required"),
@@ -168,7 +169,10 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json(cases);
+    // HIPAA Compliance: Decrypt PHI fields before returning
+    const decryptedCases = decryptCaseDataArray(cases);
+
+    return NextResponse.json(decryptedCases);
   } catch (error) {
     console.error("Error fetching cases:", error);
     return NextResponse.json(
@@ -232,10 +236,16 @@ export async function POST(request: NextRequest) {
     const radiologyFindings = validatedData.radiologyFindings || { type: "doc", content: [] };
     const pathologyFindings = validatedData.pathologyFindings || { type: "doc", content: [] };
 
+    // HIPAA Compliance: Encrypt PHI fields before saving
+    const encryptedData = encryptCaseData({
+      patientName: validatedData.patientName,
+      mrn: validatedData.mrn,
+    });
+
     const newCase = await prisma.case.create({
       data: {
-        patientName: validatedData.patientName,
-        mrn: validatedData.mrn,
+        patientName: encryptedData.patientName!,
+        mrn: encryptedData.mrn,
         age: validatedData.age,
         gender: validatedData.gender,
         presentingDepartmentId: validatedData.presentingDepartmentId,

@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
       signatureUrl: userData.signatureUrl,
       signatureAuthenticated: userData.signatureAuthenticated,
       telegramId: userData.telegramId,
+      twoFactorEnabled: userData.twoFactorEnabled,
       phoneNumber: userData.phoneNumber,
       email: userData.email,
       medicalCouncilNumber: userData.medicalCouncilNumber,
