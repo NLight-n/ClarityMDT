@@ -5,16 +5,15 @@
  * Run this script AFTER enabling ENABLE_PHI_ENCRYPTION=true in your .env file.
  * 
  * Usage:
- *   npx ts-node --compiler-options '{"module":"commonjs"}' scripts/migrate-phi-encryption.ts
+ *   npx ts-node --project scripts/tsconfig.scripts.json scripts/migrate-phi-encryption.ts
  *   
  * Or with npm scripts:
  *   npm run migrate:phi
  */
 
-import { PrismaClient } from "@prisma/client";
+import "dotenv/config";
+import { prisma } from "../lib/prisma";
 import { createHash, createCipheriv, randomBytes } from "crypto";
-
-const prisma = new PrismaClient();
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;

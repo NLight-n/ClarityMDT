@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "migrate:phi": "npx ts-node --compiler-options {\"module\":\"commonjs\"} scripts/migrate-phi-encryption.ts"
+    "migrate:phi": "npx ts-node --project scripts/tsconfig.scripts.json scripts/migrate-phi-encryption.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
