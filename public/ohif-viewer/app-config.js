@@ -16,6 +16,10 @@ window.config = {
   modes: [],
   customizationService: {
     'ohif.tours': [],
+    'ohif.studyBrowser.thumbnailGrid': {
+      id: 'ohif.studyBrowser.thumbnailGrid',
+      numColumns: 2,
+    },
   },
   showStudyList: true,
   // some windows systems have issues with more than 3 web workers
