@@ -48,3 +48,6 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+
+# debug logs
+spawn-*.log

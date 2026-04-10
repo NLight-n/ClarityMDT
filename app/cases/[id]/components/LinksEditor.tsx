@@ -830,7 +830,7 @@ export function LinksEditor({
             <DialogTitle>Enter Study Name</DialogTitle>
             <DialogDescription>
               Please enter the clinical study you are uploading (e.g., CECTAbdomen, MRISpine). 
-              The folder will be formatted with the DICOM Study Date and the patient's MRN automatically.
+              The folder will be formatted with the DICOM Study Date and the patient&apos;s MRN automatically.
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">

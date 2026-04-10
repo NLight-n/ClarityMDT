@@ -6,7 +6,7 @@ export interface User {
   id: string;
   role: Role;
   departmentId: string | null;
-  departmentName: string | null;
+  departmentName?: string | null;
 }
 
 // Extended user type for database operations
@@ -362,4 +362,3 @@ export function canAddOpinion(user: User | null | undefined): boolean {
   if (!user) return false;
   return isConsultant(user) || isCoordinator(user);
 }
-
