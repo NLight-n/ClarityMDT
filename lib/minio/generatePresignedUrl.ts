@@ -139,4 +139,49 @@ export async function generatePresignedUrls(
   return urls;
 }
 
+/**
+ * Generate a presigned URL for server-side/internal use (no endpoint replacement).
+ * Use this when the URL will be consumed by server-side code (e.g., the DICOM proxy)
+ * that can reach MinIO via the internal Docker network hostname.
+ * @param storageKey - The storage key (path) of the file
+ * @param expirySeconds - URL expiry time in seconds (default: 12 hours)
+ * @param bucket - Optional bucket name (defaults to MINIO_BUCKET env var)
+ * @returns Promise that resolves to the presigned URL with the internal endpoint
+ */
+export async function generateInternalPresignedUrl(
+  storageKey: string,
+  expirySeconds: number = 12 * 60 * 60, // 12 hours
+  bucket?: string
+): Promise<string> {
+  const client = getMinioClient();
+  const bucketName = bucket || getDefaultBucket();
+
+  // Return the raw presigned URL without replacing the endpoint.
+  // The MinIO client uses the internal endpoint (e.g., "minio") which is
+  // reachable from within the Docker network.
+  return await client.presignedGetObject(bucketName, storageKey, expirySeconds);
+}
+
+/**
+ * Generate internal presigned URLs for multiple files (no endpoint replacement).
+ * @param storageKeys - Array of storage keys (paths)
+ * @param expirySeconds - URL expiry time in seconds (default: 12 hours)
+ * @param bucket - Optional bucket name (defaults to MINIO_BUCKET env var)
+ * @returns Promise that resolves to an object mapping storage keys to URLs
+ */
+export async function generateInternalPresignedUrls(
+  storageKeys: string[],
+  expirySeconds: number = 12 * 60 * 60,
+  bucket?: string
+): Promise<Record<string, string>> {
+  const urls: Record<string, string> = {};
+
+  await Promise.all(
+    storageKeys.map(async (key) => {
+      urls[key] = await generateInternalPresignedUrl(key, expirySeconds, bucket);
+    })
+  );
+
+  return urls;
+}
 

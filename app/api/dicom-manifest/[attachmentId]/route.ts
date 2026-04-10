@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canViewCase } from "@/lib/permissions/accessControl";
 import { prisma } from "@/lib/prisma";
-import { getFileStream, generatePresignedUrls } from "@/lib/minio";
+import { getFileStream, generateInternalPresignedUrls } from "@/lib/minio";
 
 export async function GET(
   request: NextRequest,
@@ -73,11 +73,12 @@ export async function GET(
       }
     }
 
-    // 3. Generate Presigned GET URLs dynamically (valid for 12 hours to avoid mid-session expiry)
+    // 3. Generate internal presigned GET URLs (valid for 12 hours).
+    // Use internal URLs because these are fetched server-side by the DICOM proxy,
+    // which can reach MinIO via the Docker internal network hostname.
     let urlMap: Record<string, string> = {};
     if (storageKeys.size > 0) {
-      // 43200 = 12 hours
-      urlMap = await generatePresignedUrls(Array.from(storageKeys), 43200); 
+      urlMap = await generateInternalPresignedUrls(Array.from(storageKeys), 43200); 
     }
 
     // 4. Update the manifest with the generated secure URLs

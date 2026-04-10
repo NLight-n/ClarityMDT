@@ -10,10 +10,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Missing url parameter" }, { status: 400 });
     }
 
-    // SSRF Protection: Ensure targetUrl strictly points to our designated MinIO/S3 instance
-    // We expect the URL to be a valid MinIO presigned URL containing our storage origin.
+    // SSRF Protection: Ensure targetUrl strictly points to our designated MinIO/S3 instance.
+    // The presigned URLs use the internal MinIO endpoint (Docker service name or localhost).
     const minioEndpoint = process.env.MINIO_ENDPOINT || "localhost";
-    const minioPort = process.env.MINIO_PORT || "9000";
     
     let parsedUrl;
     try {
@@ -22,19 +21,28 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid URL parameter" }, { status: 400 });
     }
 
-    if (parsedUrl.hostname !== minioEndpoint && parsedUrl.hostname !== "127.0.0.1" && parsedUrl.hostname !== "localhost") {
+    // Allow the configured MinIO endpoint (e.g., "minio" in Docker), and common local aliases
+    const allowedHosts = new Set([
+      minioEndpoint,
+      "localhost",
+      "127.0.0.1",
+    ]);
+
+    if (!allowedHosts.has(parsedUrl.hostname)) {
       return NextResponse.json(
         { error: "Forbidden: URL proxying is restricted to internal buckets." },
         { status: 403 }
       );
     }
 
-    // Proxy the request to MinIO
+    // Proxy the request to MinIO using the internal URL.
+    // In Docker, this resolves via the Docker network (e.g., http://minio:9000/...)
     const response = await fetch(targetUrl, {
       method: "GET",
     });
 
     if (!response.ok) {
+      console.error(`DICOM proxy: MinIO returned ${response.status} for ${parsedUrl.pathname}`);
       return NextResponse.json(
         { error: `Failed to fetch from storage: ${response.status} ${response.statusText}` },
         { status: response.status }
