@@ -153,6 +153,16 @@ const nextConfig: NextConfig = {
             value: "strict-origin-when-cross-origin",
           },
           {
+            // Require Cross-Origin Isolation for OHIF Viewer (MPR WebAssembly + SharedArrayBuffer)
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin",
+          },
+          {
+            // Require Cross-Origin Isolation for OHIF Viewer (MPR WebAssembly + SharedArrayBuffer)
+            key: "Cross-Origin-Embedder-Policy",
+            value: "require-corp",
+          },
+          {
             // Prevent browser features that might leak PHI
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()",

@@ -14,7 +14,19 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Trash2 } from "lucide-react";
 
-interface DicomCaseEntry {
+interface DicomStorageItem {
+  id: string;
+  type: "zip" | "folder";
+  fileName: string;
+  fileSize: number;
+  caseId: string;
+  patientName: string;
+  mrn: string | null;
+  department: string;
+  status: string;
+}
+
+interface DicomCaseGroup {
   caseId: string;
   patientName: string;
   mrn: string | null;
@@ -26,7 +38,7 @@ interface DicomCaseEntry {
 interface PruneDicomDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  cases: DicomCaseEntry[];
+  storageItems: DicomStorageItem[];
   onPruneComplete: () => void;
 }
 
@@ -41,14 +53,32 @@ function formatBytes(bytes: number): string {
 export function PruneDicomDialog({
   open,
   onOpenChange,
-  cases,
+  storageItems,
   onPruneComplete,
 }: PruneDicomDialogProps) {
   const [selectedCaseIds, setSelectedCaseIds] = useState<Set<string>>(new Set());
   const [isPruning, setIsPruning] = useState(false);
 
-  // Only show ARCHIVED cases
-  const archivedCases = cases.filter((c) => c.status === "ARCHIVED");
+  // Group individual items by caseId for bulk pruning
+  const caseGroupsMap = new Map<string, DicomCaseGroup>();
+  storageItems.forEach((item) => {
+    if (!caseGroupsMap.has(item.caseId)) {
+      caseGroupsMap.set(item.caseId, {
+        caseId: item.caseId,
+        patientName: item.patientName,
+        mrn: item.mrn,
+        department: item.department,
+        status: item.status,
+        totalSizeBytes: 0,
+      });
+    }
+    const group = caseGroupsMap.get(item.caseId)!;
+    group.totalSizeBytes += item.fileSize;
+  });
+
+  const archivedCases = Array.from(caseGroupsMap.values()).filter(
+    (c) => c.status === "ARCHIVED"
+  );
 
   const toggleCase = (caseId: string) => {
     setSelectedCaseIds((prev) => {

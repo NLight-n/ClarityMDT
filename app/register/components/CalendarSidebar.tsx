@@ -156,8 +156,9 @@ export function CalendarSidebar({
     .filter((meeting) => {
       const meetingDate = new Date(meeting.date);
       const now = new Date();
-      const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      return meetingDate >= now && meetingDate <= weekFromNow && meeting.status !== "CANCELLED";
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekFromNow = new Date(startOfToday.getTime() + 7 * 24 * 60 * 60 * 1000 + (23 * 60 * 60 * 1000) + (59 * 60 * 1000));
+      return meetingDate >= startOfToday && meetingDate <= weekFromNow && meeting.status !== "CANCELLED";
     })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .slice(0, 5);

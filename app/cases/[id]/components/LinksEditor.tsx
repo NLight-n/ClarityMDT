@@ -345,7 +345,7 @@ export function LinksEditor({
           const inst = instructionsMap.get(path);
           if (inst?.presignedUrl) {
             try {
-              const res = await fetch(inst.presignedUrl, {
+              const res = await fetch(`/api/dicom/upload-proxy?key=${encodeURIComponent(inst.storageKey)}`, {
                 method: "PUT",
                 body: f
               });

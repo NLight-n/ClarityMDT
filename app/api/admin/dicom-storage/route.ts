@@ -59,76 +59,53 @@ export async function GET(request: NextRequest) {
       }
     });
 
-    // Aggregate by Case ID
-    const caseMap = new Map<string, any>();
-
-    // Process legacy ZIP records - DB fileSize is reasonably accurate for these
+    // Flatten into individual entries
+    const storageItems: any[] = [];
+    // 1. Legacy ZIP files
     for (const record of dicomFiles) {
       if (!record.case) continue;
-      const caseId = record.case.id;
-
-      if (!caseMap.has(caseId)) {
-        caseMap.set(caseId, {
-          caseId,
-          patientName: record.case.patientName,
-          mrn: record.case.mrn,
-          status: record.case.status,
-          department: record.case.presentingDepartment.name,
-          totalSizeBytes: 0,
-          files: [],
-        });
-      }
-
-      const caseEntry = caseMap.get(caseId);
-      caseEntry.totalSizeBytes += record.fileSize || 0;
-      caseEntry.files.push({
+      storageItems.push({
         id: record.id,
         type: "zip",
         fileName: record.fileName,
-        fileSize: record.fileSize,
+        fileSize: record.fileSize || 0,
         storageKey: record.storageKey,
+        caseId: record.case.id,
+        patientName: record.case.patientName,
+        mrn: record.case.mrn,
+        status: record.case.status,
+        department: record.case.presentingDepartment.name,
       });
     }
 
-    // Process modern folder DICOM records - read manifest to compute real size
+    // 2. Modern Folder DICOM records
     for (const record of dicomAttachments) {
       if (!record.case) continue;
-      const caseId = record.case.id;
-
-      if (!caseMap.has(caseId)) {
-        caseMap.set(caseId, {
-          caseId,
-          patientName: record.case.patientName,
-          mrn: record.case.mrn,
-          status: record.case.status,
-          department: record.case.presentingDepartment.name,
-          totalSizeBytes: 0,
-          files: [],
-        });
-      }
-
-      // Compute real size by reading manifest and statting all referenced files
+      
+      // Compute real size by reading manifest
       const realSize = await getDicomBundleRealSize(record.storageKey);
 
-      const caseEntry = caseMap.get(caseId);
-      caseEntry.totalSizeBytes += realSize;
-      caseEntry.files.push({
+      storageItems.push({
         id: record.id,
         type: "folder",
         fileName: record.fileName,
         fileSize: realSize,
         storageKey: record.storageKey,
+        caseId: record.case.id,
+        patientName: record.case.patientName,
+        mrn: record.case.mrn,
+        status: record.case.status,
+        department: record.case.presentingDepartment.name,
       });
     }
 
-    // Convert map to array and decrypt PHI fields
-    const aggregatedCases = Array.from(caseMap.values());
-    const decryptedCases = decryptCaseDataArray(aggregatedCases as any[]);
+    // Decrypt PHI fields
+    const decryptedItems = decryptCaseDataArray(storageItems);
 
-    // Sort by Total Size (Descending)
-    decryptedCases.sort((a: any, b: any) => b.totalSizeBytes - a.totalSizeBytes);
+    // Sort by Size (Descending)
+    decryptedItems.sort((a: any, b: any) => b.fileSize - a.fileSize);
 
-    return NextResponse.json(decryptedCases);
+    return NextResponse.json(decryptedItems);
   } catch (error) {
     console.error("Error fetching DICOM storage data:", error);
     return NextResponse.json(

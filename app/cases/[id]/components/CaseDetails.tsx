@@ -28,7 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge } from "../../components/StatusBadge";
 import { CaseStatus, Gender } from "@prisma/client";
 import { format } from "date-fns";
-import { Archive, Send, RotateCcw, Edit, Save, X, Loader2, Calendar, Trash2, FileText } from "lucide-react";
+import { Archive, Send, RotateCcw, Edit, Save, X, Loader2, Calendar, Trash2, FileText, MonitorPlay } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { isConsultant, isCoordinator, isRadOrPathConsultant } from "@/lib/permissions/client";
 import Link from "next/link";
@@ -119,9 +119,10 @@ interface CaseDetailsProps {
     question: string;
     concernedDepartmentIds: string[];
   }) => void;
+  onPresent?: () => void;
 }
 
-export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isEditing: externalIsEditing, setIsEditing: setExternalIsEditing, onSave: externalOnSave, saving: externalSaving, saveStatus: externalSaveStatus, compactMode, showMeetingOnly, onFormDataChange, onRegisterFormDataGetter }: CaseDetailsProps) {
+export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isEditing: externalIsEditing, setIsEditing: setExternalIsEditing, onSave: externalOnSave, saving: externalSaving, saveStatus: externalSaveStatus, compactMode, showMeetingOnly, onFormDataChange, onRegisterFormDataGetter, onPresent }: CaseDetailsProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
@@ -224,6 +225,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const canArchive = isCoordinator(user) && caseData.status !== CaseStatus.ARCHIVED;
   const canResubmit = caseData.status === CaseStatus.REVIEWED;
   const canGeneratePdf = caseData.status === CaseStatus.REVIEWED || caseData.status === CaseStatus.RESUBMITTED;
+  const canPresent = caseData.status === CaseStatus.SUBMITTED || caseData.status === CaseStatus.PENDING || caseData.status === CaseStatus.RESUBMITTED;
   // Can delete if: DRAFT, SUBMITTED, or PENDING status, and user is coordinator/admin/author consultant
   const isCreator = caseData.createdBy.id === user?.id;
   const canDelete = (caseData.status === CaseStatus.DRAFT || caseData.status === CaseStatus.SUBMITTED || caseData.status === CaseStatus.PENDING) &&
@@ -1015,6 +1017,12 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           <Button onClick={handleGeneratePdfClick} size="sm" disabled={downloadingPdf} variant="outline">
               <FileText className="mr-2 h-4 w-4" />
               Consensus PDF Report
+            </Button>
+          )}
+          {canPresent && !isEditing && (
+            <Button onClick={onPresent} size="sm" variant="outline">
+              <MonitorPlay className="mr-2 h-4 w-4" />
+              Presentation Mode
             </Button>
           )}
           {canDelete && !isEditing && (

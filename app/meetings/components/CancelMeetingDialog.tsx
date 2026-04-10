@@ -91,8 +91,9 @@ export function CancelMeetingDialog({
       if (response.ok) {
         const meetings = await response.json();
         const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const upcoming = meetings
-          .filter((m: Meeting) => new Date(m.date) >= now && m.id !== meetingId)
+          .filter((m: Meeting) => new Date(m.date) >= startOfToday && m.id !== meetingId)
           .sort((a: Meeting, b: Meeting) => 
             new Date(a.date).getTime() - new Date(b.date).getTime()
           );

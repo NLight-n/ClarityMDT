@@ -62,8 +62,10 @@ export default function DashboardPage() {
       if (meetingsRes.ok) {
         const meetings = await meetingsRes.json();
         const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
         const upcoming = meetings
-          .filter((m: Meeting) => new Date(m.date) >= now)
+          .filter((m: Meeting) => new Date(m.date) >= startOfToday)
           .sort((a: Meeting, b: Meeting) => 
             new Date(a.date).getTime() - new Date(b.date).getTime()
           )

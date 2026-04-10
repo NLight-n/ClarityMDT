@@ -57,7 +57,7 @@ export function PathologyEditor({
       <CardContent className="pt-2 pb-3 space-y-4">
         <RichTextEditor
           content={content}
-          onChange={isEditing ? handleChange : undefined}
+          onChange={handleChange}
           editable={!!isEditing}
           caseId={caseId}
           imageType="pathology"

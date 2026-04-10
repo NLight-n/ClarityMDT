@@ -33,7 +33,7 @@ export function RichTextEditor({
     },
     editorProps: {
       attributes: {
-        class: "prose max-w-none focus:outline-none min-h-[200px] p-4",
+        class: `prose prose-lg max-w-none focus:outline-none p-4 ${editable ? 'min-h-[200px]' : ''} dark:prose-invert prose-p:my-2 prose-headings:my-2`,
         "data-placeholder": placeholder,
       },
     },
@@ -62,7 +62,7 @@ export function RichTextEditor({
   }
 
   return (
-    <div className="border rounded-lg bg-white">
+    <div className={`rounded-lg ${editable ? 'bg-background border' : 'bg-transparent'}`}>
       {editable && (
         <div className="border-b p-2 flex gap-2 flex-wrap bg-gray-50">
           <Button

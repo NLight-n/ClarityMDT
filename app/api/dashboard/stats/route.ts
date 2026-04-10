@@ -16,6 +16,8 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
 
     // Get total cases count (excluding archived)
     const totalCases = await prisma.case.count({
@@ -34,13 +36,13 @@ export async function GET(request: NextRequest) {
     });
 
     // Get upcoming meetings count (next 30 days)
-    const thirtyDaysFromNow = new Date(now);
+    const thirtyDaysFromNow = new Date(startOfToday);
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     
     const upcomingMeetings = await prisma.meeting.count({
       where: {
         date: {
-          gte: now,
+          gte: startOfToday,
           lte: thirtyDaysFromNow,
         },
       },

@@ -244,7 +244,7 @@ export default function NewCasePage() {
                 const inst = instructionsMap.get(path);
                 if (inst?.presignedUrl) {
                   try {
-                    const uploadRes = await fetch(inst.presignedUrl, {
+                    const uploadRes = await fetch(`/api/dicom/upload-proxy?key=${encodeURIComponent(inst.storageKey)}`, {
                       method: "PUT",
                       body: f
                     });

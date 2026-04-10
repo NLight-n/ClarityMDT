@@ -41,20 +41,17 @@ import {
 import { MessageDialog } from "@/components/ui/message-dialog";
 import { PruneDicomDialog } from "./PruneDicomDialog";
 
-interface DicomCaseEntry {
+interface DicomStorageItem {
+  id: string;
+  type: "zip" | "folder";
+  fileName: string;
+  fileSize: number;
+  storageKey: string;
   caseId: string;
   patientName: string;
   mrn: string | null;
   department: string;
   status: string;
-  totalSizeBytes: number;
-  files: Array<{
-    id: string;
-    type: "zip" | "folder";
-    fileName: string;
-    fileSize: number;
-    storageKey: string;
-  }>;
 }
 
 function formatBytes(bytes: number): string {
@@ -87,14 +84,14 @@ function getStatusColor(status: string): string {
 export function StorageManagement() {
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
-  const [cases, setCases] = useState<DicomCaseEntry[]>([]);
+  const [storageItems, setStorageItems] = useState<DicomStorageItem[]>([]);
   const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
   const [isOrphanDialogOpen, setIsOrphanDialogOpen] = useState(false);
   const [isPruneDialogOpen, setIsPruneDialogOpen] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
-    caseEntry: DicomCaseEntry | null;
-  }>({ open: false, caseEntry: null });
+    item: DicomStorageItem | null;
+  }>({ open: false, item: null });
   const [messageDialog, setMessageDialog] = useState<{
     open: boolean;
     type: "success" | "error" | "info";
@@ -129,7 +126,7 @@ export function StorageManagement() {
       const response = await fetch("/api/admin/dicom-storage");
       if (response.ok) {
         const data = await response.json();
-        setCases(data);
+        setStorageItems(data);
       }
     } catch (error) {
       console.error("Error loading storage data:", error);
@@ -175,26 +172,29 @@ export function StorageManagement() {
     }
   };
 
-  const handleDeleteCaseDicom = async () => {
-    if (!deleteDialog.caseEntry) return;
+  const handleDeleteDicomItem = async () => {
+    if (!deleteDialog.item) return;
 
     try {
-      const response = await fetch("/api/admin/dicom-storage/prune", {
+      const response = await fetch("/api/admin/dicom-storage/delete-item", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ caseIds: [deleteDialog.caseEntry.caseId] }),
+        body: JSON.stringify({ 
+          id: deleteDialog.item.id,
+          type: deleteDialog.item.type 
+        }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        setCases((prev) =>
-          prev.filter((c) => c.caseId !== deleteDialog.caseEntry!.caseId)
+        setStorageItems((prev) =>
+          prev.filter((i) => i.id !== deleteDialog.item!.id)
         );
         setMessageDialog({
           open: true,
           type: "success",
-          title: "DICOM Data Deleted",
-          message: `Deleted ${data.deletedCount} file(s), freeing ${formatBytes(data.totalBytesFreed)}.`,
+          title: "DICOM Deleted",
+          message: `Deleted "${deleteDialog.item.fileName}", freeing ${formatBytes(data.bytesFreed)}.`,
         });
       } else {
         const errorData = await response.json();
@@ -214,11 +214,12 @@ export function StorageManagement() {
         message: "An error occurred while deleting DICOM data",
       });
     } finally {
-      setDeleteDialog({ open: false, caseEntry: null });
+      setDeleteDialog({ open: false, item: null });
     }
   };
 
-  const totalStorageUsed = cases.reduce((sum, c) => sum + c.totalSizeBytes, 0);
+  const totalStorageUsed = storageItems.reduce((sum, item) => sum + item.fileSize, 0);
+  const uniqueCaseCount = new Set(storageItems.map(item => item.caseId)).size;
 
   if (loading) {
     return (
@@ -257,7 +258,7 @@ export function StorageManagement() {
                 <span className="font-semibold">
                   Total: {formatBytes(totalStorageUsed)}
                 </span>{" "}
-                across {cases.length} case(s).
+                across {storageItems.length} uploads for {uniqueCaseCount} case(s).
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -292,7 +293,7 @@ export function StorageManagement() {
                 variant="destructive"
                 size="sm"
                 onClick={() => setIsPruneDialogOpen(true)}
-                disabled={cases.filter((c) => c.status === "ARCHIVED").length === 0}
+                disabled={storageItems.filter((i) => i.status === "ARCHIVED").length === 0}
               >
                 <ArchiveRestore className="mr-2 h-4 w-4" />
                 Prune Archive Data
@@ -301,7 +302,7 @@ export function StorageManagement() {
           </div>
         </CardHeader>
         <CardContent>
-          {cases.length === 0 ? (
+          {storageItems.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <HardDrive className="h-12 w-12 mx-auto mb-4 opacity-20" />
               <p>No DICOM data found.</p>
@@ -318,39 +319,43 @@ export function StorageManagement() {
                     <TableHead>MRN</TableHead>
                     <TableHead>Department</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="text-right">DICOM Size</TableHead>
+                    <TableHead>DICOM Name</TableHead>
+                    <TableHead className="text-right">Size</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {cases.map((c) => (
-                    <TableRow key={c.caseId}>
+                  {storageItems.map((item) => (
+                    <TableRow key={item.id}>
                       <TableCell className="font-medium">
-                        {c.patientName}
+                        {item.patientName}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {c.mrn || "—"}
+                        {item.mrn || "—"}
                       </TableCell>
-                      <TableCell>{c.department}</TableCell>
+                      <TableCell>{item.department}</TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`text-xs ${getStatusColor(c.status)}`}
+                          className={`text-xs ${getStatusColor(item.status)}`}
                         >
-                          {c.status}
+                          {item.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm">
-                        {formatBytes(c.totalSizeBytes)}
+                      <TableCell className="max-w-[200px] truncate" title={item.fileName}>
+                        {item.fileName}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm whitespace-nowrap">
+                        {formatBytes(item.fileSize)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() =>
-                            setDeleteDialog({ open: true, caseEntry: c })
+                            setDeleteDialog({ open: true, item: item })
                           }
-                          title="Delete DICOM data for this case"
+                          title="Delete this DICOM upload"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -401,17 +406,19 @@ export function StorageManagement() {
       {/* Delete DICOM Confirmation Dialog */}
       <AlertDialog
         open={deleteDialog.open}
-        onOpenChange={(open) => setDeleteDialog({ open, caseEntry: null })}
+        onOpenChange={(open) => setDeleteDialog({ open, item: null })}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete DICOM Data</AlertDialogTitle>
+            <AlertDialogTitle>Delete DICOM Item</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete all DICOM data for{" "}
-              <strong>{deleteDialog.caseEntry?.patientName}</strong>? This will
-              remove {formatBytes(deleteDialog.caseEntry?.totalSizeBytes || 0)}{" "}
-              of DICOM files from storage. Links, attachments, and consensus
-              reports will be preserved.
+              Are you sure you want to delete the DICOM upload{" "}
+              <strong>&quot;{deleteDialog.item?.fileName}&quot;</strong> for{" "}
+              <strong>{deleteDialog.item?.patientName}</strong>?
+              <br />
+              <br />
+              This will remove {formatBytes(deleteDialog.item?.fileSize || 0)} of
+              DICOM data from storage.
               <br />
               <br />
               This action cannot be undone.
@@ -420,10 +427,10 @@ export function StorageManagement() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDeleteCaseDicom}
+              onClick={handleDeleteDicomItem}
               className="bg-destructive text-destructive-foreground"
             >
-              Delete DICOM Data
+              Delete DICOM
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -433,7 +440,7 @@ export function StorageManagement() {
       <PruneDicomDialog
         open={isPruneDialogOpen}
         onOpenChange={setIsPruneDialogOpen}
-        cases={cases}
+        storageItems={storageItems}
         onPruneComplete={loadStorageData}
       />
 

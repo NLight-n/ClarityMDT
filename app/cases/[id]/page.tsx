@@ -18,6 +18,7 @@ import { CaseHistory } from "./components/CaseHistory";
 import { AttachmentManager } from "./components/AttachmentManager";
 import { LinksEditor } from "./components/LinksEditor";
 import { FollowUpEditor } from "./components/FollowUpEditor";
+import { PresentationMode } from "./components/PresentationMode";
 
 function CaseDetailPageContent() {
   const params = useParams();
@@ -67,6 +68,7 @@ function CaseDetailPageContent() {
     question: string;
     concernedDepartmentIds: string[];
   }) | null>(null);
+  const [isPresentationMode, setIsPresentationMode] = useState(false);
 
   // Get the referrer from query params
   const from = searchParams.get("from") || "cases";
@@ -347,6 +349,9 @@ function CaseDetailPageContent() {
 
   return (
     <div className="container mx-auto p-4 space-y-3">
+      {isPresentationMode && (
+        <PresentationMode caseData={caseData} onClose={() => setIsPresentationMode(false)} />
+      )}
       {/* Sticky Header Section */}
       <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 pt-4 pb-2 -mx-4 px-4 -mt-4 mb-2 border-b drop-shadow-sm">
         {/* Compact Header with Back button and Action Buttons */}
@@ -380,6 +385,7 @@ function CaseDetailPageContent() {
               onFormDataChange={(data) => {
                 setCaseFormData((prev) => prev ? { ...prev, ...data } : data);
               }}
+              onPresent={() => setIsPresentationMode(true)}
             />
           </div>
         </div>

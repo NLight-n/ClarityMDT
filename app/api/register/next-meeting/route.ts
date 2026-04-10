@@ -110,6 +110,8 @@ export async function GET(request: NextRequest) {
     } else {
       // Get next upcoming meeting (exclude cancelled)
       const now = new Date();
+      now.setHours(0, 0, 0, 0); // Include all meetings from today
+      
       meeting = await prisma.meeting.findFirst({
         where: {
           date: {
