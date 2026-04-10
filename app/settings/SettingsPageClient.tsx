@@ -9,10 +9,12 @@ import { UserManagement } from "./components/UserManagement";
 import { DepartmentManagement } from "./components/DepartmentManagement";
 import { HospitalSettings } from "./components/HospitalSettings";
 import { TelegramSettings } from "./components/TelegramSettings";
+import { WhatsappSettings } from "./components/WhatsappSettings";
 import { EmailSettings } from "./components/EmailSettings";
 import { AuditLogging } from "./components/AuditLogging";
 import { Backup } from "./components/Backup";
 import { NotificationSettings } from "./components/NotificationSettings";
+import { StorageManagement } from "./components/StorageManagement";
 import { About } from "./components/About";
 import { isAdmin, isCoordinator } from "@/lib/permissions/client";
 
@@ -46,10 +48,10 @@ export function SettingsPageClient() {
   useEffect(() => {
     const validTabs = ["profile", "notifications", "about"];
     if (isUserAdmin) {
-      validTabs.push("users", "admin", "audit", "backup");
+      validTabs.push("users", "admin", "audit", "backup", "storage");
     }
     if (isUserCoordinator) {
-      validTabs.push("users", "departments");
+      validTabs.push("users", "departments", "audit", "storage");
     }
 
     if (activeTab && !validTabs.includes(activeTab)) {
@@ -75,7 +77,8 @@ export function SettingsPageClient() {
           {(isUserAdmin || isUserCoordinator) && <TabsTrigger value="users">User Management</TabsTrigger>}
           {isUserCoordinator && <TabsTrigger value="departments">Department Management</TabsTrigger>}
           {isUserAdmin && <TabsTrigger value="admin">Admin</TabsTrigger>}
-          {isUserAdmin && <TabsTrigger value="audit">Audit Logging</TabsTrigger>}
+          {(isUserAdmin || isUserCoordinator) && <TabsTrigger value="audit">Audit Logging</TabsTrigger>}
+          {(isUserAdmin || isUserCoordinator) && <TabsTrigger value="storage">Storage</TabsTrigger>}
           {isUserAdmin && <TabsTrigger value="backup">Backup</TabsTrigger>}
         </TabsList>
 
@@ -113,6 +116,7 @@ export function SettingsPageClient() {
               <TabsList className="inline-flex w-full lg:w-auto flex-wrap">
                 <TabsTrigger value="hospital">Hospital Settings</TabsTrigger>
                 <TabsTrigger value="telegram">Telegram Settings</TabsTrigger>
+                <TabsTrigger value="whatsapp">WhatsApp Settings</TabsTrigger>
                 <TabsTrigger value="email">Email Settings</TabsTrigger>
               </TabsList>
               
@@ -123,17 +127,28 @@ export function SettingsPageClient() {
               <TabsContent value="telegram" className="mt-6">
                 <TelegramSettings />
               </TabsContent>
+
+              <TabsContent value="whatsapp" className="mt-6">
+                <WhatsappSettings />
+              </TabsContent>
               
               <TabsContent value="email" className="mt-6">
                 <EmailSettings />
               </TabsContent>
+
             </Tabs>
           </TabsContent>
         )}
 
-        {isUserAdmin && (
+        {(isUserAdmin || isUserCoordinator) && (
           <TabsContent value="audit" className="mt-6">
             <AuditLogging />
+          </TabsContent>
+        )}
+
+        {(isUserAdmin || isUserCoordinator) && (
+          <TabsContent value="storage" className="mt-6">
+            <StorageManagement />
           </TabsContent>
         )}
 
@@ -146,4 +161,3 @@ export function SettingsPageClient() {
     </div>
   );
 }
-

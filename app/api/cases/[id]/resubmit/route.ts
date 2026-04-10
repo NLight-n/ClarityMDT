@@ -4,6 +4,7 @@ import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canEditCase } from "@/lib/permissions/accessControl";
 import { CaseStatus, NotificationType } from "@prisma/client";
 import { createNotificationsForUsers } from "@/lib/notifications/createNotification";
+import { decryptCaseData } from "@/lib/security/phiCaseWrapper";
 
 // POST /api/cases/[id]/resubmit - Resubmit a case
 export async function POST(
@@ -111,17 +112,19 @@ export async function POST(
         },
       },
     });
+    const decryptedUpdatedCase = decryptCaseData(updatedCase);
 
     // Notify all users about the resubmitted case when assigned to a meeting
-    if (assignedMeetingId && updatedCase.assignedMeeting) {
+    if (assignedMeetingId && updatedCase.assignedMeeting && decryptedUpdatedCase) {
       const allUsers = await prisma.user.findMany({ select: { id: true } });
       const meetingDateStr = updatedCase.assignedMeeting.date.toLocaleDateString();
+      const patientLabel = `${decryptedUpdatedCase.patientName} (MRN: ${decryptedUpdatedCase.mrn || "N/A"})`;
       await createNotificationsForUsers(
         allUsers.map((u) => u.id),
         {
           type: NotificationType.CASE_RESUBMITTED,
           title: "Case Resubmitted to Meeting",
-          message: `Case from ${updatedCase.presentingDepartment.name} resubmitted to MDT meeting on ${meetingDateStr}: ${updatedCase.patientName}`,
+          message: `Case from ${updatedCase.presentingDepartment.name} resubmitted to MDT meeting on ${meetingDateStr}: ${patientLabel}`,
           meetingId: assignedMeetingId,
           caseId: id,
         }
@@ -137,4 +140,3 @@ export async function POST(
     );
   }
 }
-

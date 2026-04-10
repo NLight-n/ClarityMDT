@@ -5,6 +5,7 @@ import { isCoordinator } from "@/lib/permissions/accessControl";
 import { z } from "zod";
 import { createNotificationsForUsers } from "@/lib/notifications/createNotification";
 import { NotificationType } from "@prisma/client";
+import { decryptCaseDataArray } from "@/lib/security/phiCaseWrapper";
 
 const cancelMeetingSchema = z.object({
   cancellationRemarks: z.string().optional(),
@@ -155,11 +156,13 @@ export async function POST(
             select: {
               id: true,
               patientName: true,
+              mrn: true,
               presentingDepartment: { select: { id: true, name: true } },
               createdById: true,
             },
           })
         : [];
+    const decryptedCaseDetails = decryptCaseDataArray(caseDetails);
 
     const reassignTargetMeetingIds =
       reassignCases
@@ -270,7 +273,7 @@ export async function POST(
     if (reassignCases && reassignCases.length > 0) {
       for (const reassign of reassignCases) {
         if (!reassign.newMeetingId) continue;
-        const caseInfo = caseDetails.find((c) => c.id === reassign.caseId);
+        const caseInfo = decryptedCaseDetails.find((c) => c.id === reassign.caseId);
         const newMeeting = targetMeetingMap.get(reassign.newMeetingId);
         if (!caseInfo || !newMeeting) continue;
 
@@ -285,10 +288,11 @@ export async function POST(
 
         if (recipients.size > 0) {
           const newMeetingDateStr = newMeeting.date.toLocaleDateString();
+          const patientLabel = `${caseInfo.patientName} (MRN: ${caseInfo.mrn || "N/A"})`;
           await createNotificationsForUsers(Array.from(recipients), {
             type: NotificationType.CASE_POSTPONED,
             title: "Case Postponed to Next Meeting",
-            message: `Case ${caseInfo.patientName} postponed to MDT meeting on ${newMeetingDateStr}${newMeeting.description ? `: ${newMeeting.description}` : ""}`,
+            message: `Case ${patientLabel} postponed to MDT meeting on ${newMeetingDateStr}${newMeeting.description ? `: ${newMeeting.description}` : ""}`,
             meetingId: newMeeting.id,
             caseId: caseInfo.id,
           });
@@ -305,4 +309,3 @@ export async function POST(
     );
   }
 }
-

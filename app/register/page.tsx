@@ -32,6 +32,9 @@ interface Meeting {
       attachments: number;
       specialistsOpinions: number;
     };
+    attachments: Array<{
+      isDicomBundle: boolean;
+    }>;
   }>;
 }
 

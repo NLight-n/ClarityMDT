@@ -7,6 +7,7 @@ export interface User {
   id: string;
   role: Role;
   departmentId: string | null;
+  departmentName: string | null;
 }
 
 /**
@@ -28,6 +29,15 @@ export function isCoordinator(user: User | null | undefined): boolean {
  */
 export function isConsultant(user: User | null | undefined): boolean {
   return user?.role === Role.Consultant;
+}
+
+/**
+ * Check if user is a Radiology or Pathology Consultant
+ */
+export function isRadOrPathConsultant(user: User | null | undefined): boolean {
+  if (!user || user.role !== Role.Consultant || !user.departmentName) return false;
+  const deptName = user.departmentName.toLowerCase();
+  return deptName.includes("radiology") || deptName.includes("pathology");
 }
 
 /**

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canViewCase, canEditCase } from "@/lib/permissions/accessControl";
 import { prisma } from "@/lib/prisma";
-import { deleteFile } from "@/lib/minio";
+import { deleteFile, deleteFolder, getDicomFolderPrefix } from "@/lib/minio";
+import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
 
 /**
  * DELETE /api/attachments/[id] - Delete an attachment
@@ -23,8 +24,19 @@ export async function DELETE(
     // Get the attachment record
     const attachment = await prisma.caseAttachment.findUnique({
       where: { id },
-      include: {
-        case: true,
+      select: {
+        id: true,
+        fileName: true,
+        storageKey: true,
+        isDicomBundle: true,
+        caseId: true,
+        case: {
+          select: {
+            id: true,
+            patientName: true,
+            mrn: true,
+          },
+        },
       },
     });
 
@@ -43,15 +55,36 @@ export async function DELETE(
 
     // Delete from MinIO
     try {
-      await deleteFile(attachment.storageKey);
+      const folderPrefix = getDicomFolderPrefix(attachment.storageKey);
+      if (attachment.isDicomBundle && folderPrefix) {
+        // Delete the entire folder (manifest + raw files sharing the same timestamp prefix)
+        await deleteFolder(folderPrefix);
+      } else {
+        await deleteFile(attachment.storageKey);
+      }
     } catch (minioError) {
       console.error("Error deleting file from MinIO:", minioError);
       // Continue to delete database record even if MinIO delete fails
     }
 
+
     // Delete from database
     await prisma.caseAttachment.delete({
       where: { id },
+    });
+
+    // Log audit entry
+    await createAuditLog({
+      action: attachment.isDicomBundle ? AuditAction.DICOM_DELETE : AuditAction.ATTACHMENT_DELETE,
+      userId: currentUser.id,
+      caseId: attachment.caseId,
+      details: {
+        fileName: attachment.fileName,
+        isDicomBundle: attachment.isDicomBundle,
+        patientName: attachment.case.patientName,
+        mrn: attachment.case.mrn,
+      },
+      ipAddress: getIpAddress(request.headers),
     });
 
     return NextResponse.json({ message: "Attachment deleted" }, { status: 200 });

@@ -7,6 +7,7 @@ import { CaseStatus, Gender, NotificationType } from "@prisma/client";
 import { z } from "zod";
 import { createNotificationsForUsers } from "@/lib/notifications/createNotification";
 import { encryptCaseData, decryptCaseData } from "@/lib/security/phiCaseWrapper";
+import { getObjectsSizeByPrefix } from "@/lib/minio/delete";
 
 const updateCaseSchema = z.object({
   patientName: z.string().min(1).optional(),
@@ -20,6 +21,7 @@ const updateCaseSchema = z.object({
   diagnosisStage: z.string().optional(),
   treatmentPlan: z.string().optional(),
   question: z.string().optional(),
+  concernedDepartmentIds: z.array(z.string()).optional(),
   assignedMeetingId: z.string().nullable().optional(),
   links: z.array(z.object({ label: z.string(), url: z.string().url() })).optional(),
   followUp: z.string().optional(),
@@ -120,6 +122,19 @@ export async function GET(
             fileType: true,
             fileSize: true,
             storageKey: true,
+            isDicomBundle: true,
+            createdAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+        dicomFiles: {
+          select: {
+            id: true,
+            fileName: true,
+            fileSize: true,
+            storageKey: true,
             createdAt: true,
           },
           orderBy: {
@@ -165,6 +180,28 @@ export async function GET(
     // HIPAA Compliance: Decrypt PHI fields before returning
     const decryptedCase = decryptCaseData(caseRecord);
 
+    if (!decryptedCase) {
+       return NextResponse.json({ error: "Failed to decrypt case" }, { status: 500 });
+    }
+
+    // Calculate real sizes for DICOM bundles
+    if (decryptedCase.attachments) {
+      decryptedCase.attachments = await Promise.all(
+        decryptedCase.attachments.map(async (attachment: any) => {
+          if (attachment.isDicomBundle) {
+            try {
+              const { getDicomManifestRealSize } = await import("@/lib/minio");
+              const realSize = await getDicomManifestRealSize(attachment.storageKey);
+              return { ...attachment, realSize };
+            } catch (e) {
+              console.error(`Failed to calculate real size for bundle ${attachment.id}:`, e);
+            }
+          }
+          return attachment;
+        })
+      );
+    }
+
     return NextResponse.json(decryptedCase);
   } catch (error) {
     console.error("Error fetching case:", error);
@@ -191,16 +228,28 @@ export async function PATCH(
     const body = await request.json();
     const validatedData = updateCaseSchema.parse(body);
 
-    // Get the existing case
+    // Get the existing case with all relevant fields for change tracking
     const existingCase = await prisma.case.findUnique({
       where: { id },
       select: {
         id: true,
         patientName: true,
         mrn: true,
+        age: true,
+        gender: true,
+        presentingDepartmentId: true,
+        clinicalDetails: true,
+        radiologyFindings: true,
+        pathologyFindings: true,
+        diagnosisStage: true,
+        treatmentPlan: true,
+        question: true,
+        concernedDepartmentIds: true,
         status: true,
         assignedMeetingId: true,
         submittedAt: true,
+        links: true,
+        followUp: true,
         assignedMeeting: {
           select: {
             id: true,
@@ -215,20 +264,24 @@ export async function PATCH(
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
-    // Check permissions: Only creator, coordinator, or admin can edit drafts
-    if (existingCase.status === CaseStatus.DRAFT) {
-      const canEdit = await canEditCase(user, id);
-      if (!canEdit) {
-        return NextResponse.json(
-          { error: "Only the creator, coordinator, or admin can edit draft cases" },
-          { status: 403 }
-        );
-      }
-    } else {
-      // For non-draft cases, only coordinators/admins can edit
+    // Check general edit permissions
+    const canEdit = await canEditCase(user, id);
+    if (!canEdit) {
+      return NextResponse.json(
+        { error: "You do not have permission to edit this case" },
+        { status: 403 }
+      );
+    }
+
+    // Check status-based permissions:
+    // Only coordinators or admins can edit REVIEWED or ARCHIVED cases
+    if (
+      existingCase.status === CaseStatus.REVIEWED ||
+      existingCase.status === CaseStatus.ARCHIVED
+    ) {
       if (!isCoordinator(user)) {
         return NextResponse.json(
-          { error: "Only coordinators or admins can edit submitted cases" },
+          { error: "Only coordinators or admins can edit reviewed or archived cases" },
           { status: 403 }
         );
       }
@@ -245,6 +298,22 @@ export async function PATCH(
           { error: "Department not found" },
           { status: 400 }
         );
+      }
+    }
+
+    if (validatedData.concernedDepartmentIds !== undefined) {
+      const uniqueIds = Array.from(new Set(validatedData.concernedDepartmentIds));
+      if (uniqueIds.length > 0) {
+        const existingDepartments = await prisma.department.findMany({
+          where: { id: { in: uniqueIds } },
+          select: { id: true },
+        });
+        if (existingDepartments.length !== uniqueIds.length) {
+          return NextResponse.json(
+            { error: "One or more concerned departments are invalid" },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -273,73 +342,117 @@ export async function PATCH(
       }
     }
 
-    // Prepare update data
+    // Prepare update data and track changes for audit logging
     const updateData: any = {};
+    
+    // Decrypt existing PHI for accurate comparison
+    const decryptedExisting = decryptCaseData({
+        patientName: existingCase.patientName,
+        mrn: existingCase.mrn
+    });
+
+    if (!decryptedExisting) {
+        return NextResponse.json({ error: "Failed to decrypt case data" }, { status: 500 });
+    }
+
+    const auditDetails: any = {
+      patientName: existingCase.patientName, // Keep encrypted for identification in log record
+      mrn: existingCase.mrn, // Keep encrypted for identification in log record
+      changes: {} as Record<string, { old: any, new: any }>,
+    };
+
+    const trackChange = (field: string, oldValue: any, newValue: any) => {
+        // Handle deep equality for JSON fields and arrays
+        const oldStr = JSON.stringify(oldValue);
+        const newStr = JSON.stringify(newValue);
+        if (oldStr !== newStr) {
+            auditDetails.changes[field] = { old: oldValue, new: newValue };
+            return true;
+        }
+        return false;
+    };
 
     // Status logic per requirements:
-    // - Unassigned cases = DRAFT
-    // - Cases assigned to meeting = SUBMITTED (if currently DRAFT or PENDING) or keep current status
-    // - Remove from meeting = DRAFT
     if (validatedData.assignedMeetingId !== undefined) {
       if (validatedData.assignedMeetingId !== null) {
-        // Assigning to a meeting
-        // If current status is DRAFT or PENDING, change to SUBMITTED
-        // Otherwise keep current status (e.g., RESUBMITTED stays RESUBMITTED)
         if (existingCase.status === CaseStatus.DRAFT || existingCase.status === CaseStatus.PENDING) {
           updateData.status = CaseStatus.SUBMITTED;
-          // Set submittedAt if not already set
+          trackChange("status", existingCase.status, CaseStatus.SUBMITTED);
           if (!existingCase.submittedAt) {
             updateData.submittedAt = new Date();
           }
         }
-        // If status is not DRAFT or PENDING, keep the current status
       } else {
-        // Unassigning from meeting - set status to DRAFT
         updateData.status = CaseStatus.DRAFT;
+        trackChange("status", existingCase.status, CaseStatus.DRAFT);
       }
     }
 
-    // HIPAA Compliance: Encrypt PHI fields if provided
-    if (validatedData.patientName !== undefined || validatedData.mrn !== undefined) {
-      const encryptedData = encryptCaseData({
-        patientName: validatedData.patientName,
-        mrn: validatedData.mrn,
+    // PHI fields - compare plaintext to plaintext
+    if (validatedData.patientName !== undefined) {
+      if (trackChange("patientName", decryptedExisting.patientName, validatedData.patientName)) {
+        const encrypted = encryptCaseData({ patientName: validatedData.patientName }).patientName;
+        updateData.patientName = encrypted;
+        // In audit logs, we store the decrypted values for the change comparison table
+        // (the API route app/api/audit-logs/route.ts handles decryption for viewing)
+      }
+    }
+    if (validatedData.mrn !== undefined) {
+      if (trackChange("mrn", decryptedExisting.mrn, validatedData.mrn)) {
+        const encrypted = encryptCaseData({ mrn: validatedData.mrn }).mrn;
+        updateData.mrn = encrypted;
+      }
+    }
+
+    // Other simple fields
+    const simpleFields = ["age", "gender", "presentingDepartmentId", "diagnosisStage", "treatmentPlan", "question", "assignedMeetingId", "followUp"];
+    for (const field of simpleFields) {
+      if ((validatedData as any)[field] !== undefined) {
+        if (trackChange(field, (existingCase as any)[field], (validatedData as any)[field])) {
+            updateData[field] = (validatedData as any)[field];
+        }
+      }
+    }
+
+    // JSON fields
+    const jsonFields = ["clinicalDetails", "radiologyFindings", "pathologyFindings", "links", "concernedDepartmentIds"];
+    for (const field of jsonFields) {
+      if ((validatedData as any)[field] !== undefined) {
+        if (trackChange(field, (existingCase as any)[field], (validatedData as any)[field])) {
+            updateData[field] = (validatedData as any)[field];
+        }
+      }
+    }
+
+    const hasCaseChanges = Object.keys(auditDetails.changes).length > 0;
+
+    if (!hasCaseChanges) {
+      const unchangedCase = await prisma.case.findUnique({
+        where: { id },
+        include: {
+          presentingDepartment: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          assignedMeeting: {
+            select: {
+              id: true,
+              date: true,
+              description: true,
+            },
+          },
+        },
       });
-      if (validatedData.patientName !== undefined) updateData.patientName = encryptedData.patientName;
-      if (validatedData.mrn !== undefined) updateData.mrn = encryptedData.mrn;
-    }
-    if (validatedData.age !== undefined) updateData.age = validatedData.age;
-    if (validatedData.gender !== undefined) updateData.gender = validatedData.gender;
-    if (validatedData.presentingDepartmentId !== undefined) {
-      updateData.presentingDepartmentId = validatedData.presentingDepartmentId;
-    }
-    if (validatedData.clinicalDetails !== undefined) {
-      updateData.clinicalDetails = validatedData.clinicalDetails;
-    }
-    if (validatedData.radiologyFindings !== undefined) {
-      updateData.radiologyFindings = validatedData.radiologyFindings;
-    }
-    if (validatedData.pathologyFindings !== undefined) {
-      updateData.pathologyFindings = validatedData.pathologyFindings;
-    }
-    if (validatedData.diagnosisStage !== undefined) {
-      updateData.diagnosisStage = validatedData.diagnosisStage;
-    }
-    if (validatedData.treatmentPlan !== undefined) {
-      updateData.treatmentPlan = validatedData.treatmentPlan;
-    }
-    if (validatedData.question !== undefined) {
-      updateData.question = validatedData.question;
-    }
-    if (validatedData.assignedMeetingId !== undefined) {
-      updateData.assignedMeetingId = validatedData.assignedMeetingId;
-      // Status is already set above based on whether meeting is assigned or unassigned
-    }
-    if (validatedData.links !== undefined) {
-      updateData.links = validatedData.links;
-    }
-    if (validatedData.followUp !== undefined) {
-      updateData.followUp = validatedData.followUp;
+
+      return NextResponse.json(unchangedCase);
     }
 
     const updatedCase = await prisma.case.update({
@@ -367,19 +480,14 @@ export async function PATCH(
         },
       },
     });
+    const decryptedUpdatedCase = decryptCaseData(updatedCase);
 
-    // Log audit entry
+    // Log audit entry only when case fields actually changed.
     await createAuditLog({
       action: AuditAction.CASE_UPDATE,
       userId: user.id,
       caseId: id,
-      details: {
-        patientName: updatedCase.patientName,
-        mrn: updatedCase.mrn,
-        previousStatus: existingCase.status,
-        newStatus: updatedCase.status,
-        changes: Object.keys(updateData),
-      },
+      details: auditDetails,
       ipAddress: getIpAddress(request.headers),
     });
 
@@ -390,7 +498,8 @@ export async function PATCH(
       previousMeetingId &&
       newMeetingId &&
       newMeetingId !== previousMeetingId &&
-      updatedCase.assignedMeeting
+      updatedCase.assignedMeeting &&
+      decryptedUpdatedCase
     ) {
       const recipients = new Set<string>();
       if (updatedCase.createdBy.id) {
@@ -409,6 +518,7 @@ export async function PATCH(
 
       if (recipients.size > 0) {
         const meetingDateStr = updatedCase.assignedMeeting.date.toLocaleDateString();
+        const patientLabel = `${decryptedUpdatedCase.patientName} (MRN: ${decryptedUpdatedCase.mrn || "N/A"})`;
         const prevDate = existingCase.assignedMeeting?.date
           ? new Date(existingCase.assignedMeeting.date)
           : null;
@@ -422,7 +532,7 @@ export async function PATCH(
         await createNotificationsForUsers(Array.from(recipients), {
           type: NotificationType.CASE_POSTPONED,
           title,
-          message: `Case ${updatedCase.patientName} from ${updatedCase.presentingDepartment.name} ${verb} MDT meeting on ${meetingDateStr}${updatedCase.assignedMeeting.description ? `: ${updatedCase.assignedMeeting.description}` : ""}`,
+          message: `Case ${patientLabel} from ${updatedCase.presentingDepartment.name} ${verb} MDT meeting on ${meetingDateStr}${updatedCase.assignedMeeting.description ? `: ${updatedCase.assignedMeeting.description}` : ""}`,
           meetingId: updatedCase.assignedMeeting.id,
           caseId: updatedCase.id,
         });
@@ -523,4 +633,3 @@ export async function DELETE(
     );
   }
 }
-

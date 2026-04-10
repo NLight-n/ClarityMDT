@@ -261,11 +261,27 @@ export function FileViewerModal({
                   />
                 </div>
               ) : isPdf ? (
-                <iframe
-                  src={objectUrl}
-                  className="w-full h-full border-0"
-                  title={fileName}
-                />
+                <object
+                  data={objectUrl}
+                  type="application/pdf"
+                  className="w-full h-full border-0 rounded-md"
+                >
+                  <iframe
+                    src={objectUrl}
+                    className="w-full h-full border-0 rounded-md"
+                    title={fileName}
+                  >
+                    <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        This browser does not support inline PDF viewing.
+                      </p>
+                      <Button onClick={handleDownload}>
+                        <Download className="h-4 w-4 mr-2" />
+                        Download to view
+                      </Button>
+                    </div>
+                  </iframe>
+                </object>
               ) : (
                 <div className="text-center p-8">
                   <p className="text-sm text-muted-foreground mb-4">

@@ -49,11 +49,24 @@ export async function GET(request: NextRequest) {
     // Get total users count
     const totalUsers = await prisma.user.count();
 
+    // Get total storage space used by files
+    const storageStats = await prisma.caseAttachment.aggregate({
+      _sum: {
+        fileSize: true,
+      },
+    });
+    
+    // Default max storage to 500GB constraint
+    const totalStorageUsed = storageStats._sum.fileSize || 0;
+    const totalStorageLimit = 500 * 1024 * 1024 * 1024; // 500GB
+
     return NextResponse.json({
       totalCases,
       pendingCases,
       upcomingMeetings,
       totalUsers,
+      totalStorageUsed,
+      totalStorageLimit,
     });
   } catch (error) {
     console.error("Error fetching dashboard statistics:", error);

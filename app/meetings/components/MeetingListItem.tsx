@@ -41,7 +41,8 @@ export function MeetingListItem({
   const isCancelled = status === "CANCELLED";
 
   return (
-    <div className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+    <div className="flex items-center justify-between p-4 border rounded-lg bg-white shadow-sm hover:bg-neutral-50 transition-colors">
+
       <div className="flex items-center gap-4 flex-1 min-w-0">
         {/* Date */}
         <div className="flex items-center gap-2 flex-shrink-0">

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { CaseStatus } from "@prisma/client";
+import { decryptCaseDataArray } from "@/lib/security/phiCaseWrapper";
 
 /**
  * Helper function to update SUBMITTED cases to PENDING if their meeting date has passed
@@ -81,6 +82,12 @@ export async function GET(request: NextRequest) {
               radiologyFindings: true,
               pathologyFindings: true,
               followUp: true,
+              links: true,
+              attachments: {
+                select: {
+                  isDicomBundle: true,
+                },
+              },
               presentingDepartment: {
                 select: {
                   name: true,
@@ -90,6 +97,7 @@ export async function GET(request: NextRequest) {
                 select: {
                   attachments: true,
                   specialistsOpinions: true,
+                  dicomFiles: true,
                 },
               },
             },
@@ -123,6 +131,12 @@ export async function GET(request: NextRequest) {
               radiologyFindings: true,
               pathologyFindings: true,
               followUp: true,
+              links: true,
+              attachments: {
+                select: {
+                  isDicomBundle: true,
+                },
+              },
               presentingDepartment: {
                 select: {
                   name: true,
@@ -132,6 +146,7 @@ export async function GET(request: NextRequest) {
                 select: {
                   attachments: true,
                   specialistsOpinions: true,
+                  dicomFiles: true,
                 },
               },
             },
@@ -153,6 +168,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // HIPAA Compliance: Decrypt PHI fields before returning
+    if (meeting.cases && Array.isArray(meeting.cases)) {
+      meeting.cases = decryptCaseDataArray(meeting.cases) as any;
+    }
+
     return NextResponse.json(meeting);
   } catch (error) {
     console.error("Error fetching next meeting:", error);
@@ -162,4 +182,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

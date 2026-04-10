@@ -6,6 +6,12 @@ import { CaseStatus } from "@prisma/client";
 import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
 import { createNotificationsForUsers } from "@/lib/notifications/createNotification";
 import { NotificationType } from "@prisma/client";
+import { decryptCaseData } from "@/lib/security/phiCaseWrapper";
+
+function normalizeConcernedDepartmentIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string");
+}
 
 // POST /api/cases/[id]/submit - Submit a case
 export async function POST(
@@ -113,6 +119,7 @@ export async function POST(
         },
       },
     });
+    const decryptedUpdatedCase = decryptCaseData(updatedCase);
 
     // Create audit log for case submission
     await createAuditLog({
@@ -128,15 +135,32 @@ export async function POST(
     });
 
     // Create notifications for all users about the submitted case
-    if (assignedMeetingId && updatedCase.assignedMeeting) {
+    if (assignedMeetingId && updatedCase.assignedMeeting && decryptedUpdatedCase) {
       const allUsers = await prisma.user.findMany({ select: { id: true } });
       const meetingDateStr = updatedCase.assignedMeeting.date.toLocaleDateString();
+      const patientLabel = `${decryptedUpdatedCase.patientName} (MRN: ${decryptedUpdatedCase.mrn || "N/A"})`;
+      const concernedDepartmentIds = normalizeConcernedDepartmentIds((updatedCase as any).concernedDepartmentIds);
+      let concernedDepartmentsText = "Not specified";
+      if (concernedDepartmentIds.length > 0) {
+        const concernedDepartments = await prisma.department.findMany({
+          where: { id: { in: concernedDepartmentIds } },
+          select: { id: true, name: true },
+        });
+        const departmentNameMap = new Map(concernedDepartments.map((department) => [department.id, department.name]));
+        const orderedDepartmentNames = concernedDepartmentIds
+          .map((departmentId) => departmentNameMap.get(departmentId))
+          .filter((name): name is string => Boolean(name));
+        if (orderedDepartmentNames.length > 0) {
+          concernedDepartmentsText = orderedDepartmentNames.join(", ");
+        }
+      }
+
       await createNotificationsForUsers(
         allUsers.map((u) => u.id),
         {
           type: NotificationType.CASE_SUBMITTED,
           title: "Case Submitted to Meeting",
-          message: `New case from ${updatedCase.presentingDepartment.name} submitted to MDT meeting on ${meetingDateStr}: ${updatedCase.patientName}`,
+          message: `New case from ${updatedCase.presentingDepartment.name} submitted to MDT meeting on ${meetingDateStr}: ${patientLabel}\nExpert opinion needed from these departments for this case: ${concernedDepartmentsText}`,
           meetingId: assignedMeetingId,
           caseId: id,
       }
@@ -152,4 +176,3 @@ export async function POST(
     );
   }
 }
-

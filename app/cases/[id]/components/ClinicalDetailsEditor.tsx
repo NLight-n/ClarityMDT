@@ -7,7 +7,6 @@ import { Loader2, Save, Edit, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { isCoordinator } from "@/lib/permissions/client";
 import { RichTextEditor } from "@/components/editors/RichTextEditor";
-import { processEditorImages } from "@/lib/utils/processEditorImages";
 import { CaseStatus } from "@prisma/client";
 
 interface ClinicalDetailsEditorProps {
@@ -19,6 +18,7 @@ interface ClinicalDetailsEditorProps {
   isEditing?: boolean;
   setIsEditing?: (editing: boolean) => void;
   onContentChange?: (content: any) => void;
+  onContentGetter?: (getter: () => any) => void;
 }
 
 export function ClinicalDetailsEditor({
@@ -30,6 +30,7 @@ export function ClinicalDetailsEditor({
   isEditing: externalIsEditing,
   setIsEditing: setExternalIsEditing,
   onContentChange,
+  onContentGetter,
 }: ClinicalDetailsEditorProps) {
   const { data: session } = useSession();
   const [content, setContent] = useState<any>(
@@ -40,6 +41,9 @@ export function ClinicalDetailsEditor({
   );
   const [internalIsEditing, setInternalIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const userId = session?.user?.id;
+  const userRole = session?.user?.role;
+  const userDepartmentId = session?.user?.departmentId ?? null;
   
   // Use external edit mode if provided, otherwise use internal
   const isEditing = externalIsEditing !== undefined ? externalIsEditing : internalIsEditing;
@@ -50,16 +54,16 @@ export function ClinicalDetailsEditor({
   // Check permissions via API
   useEffect(() => {
     const checkPermissions = async () => {
-      if (!session?.user) {
+      if (!userId || !userRole) {
         setCanEdit(false);
         setCheckingPermission(false);
         return;
       }
 
       const user = {
-        id: session.user.id,
-        role: session.user.role,
-        departmentId: session.user.departmentId,
+        id: userId,
+        role: userRole,
+        departmentId: userDepartmentId,
       };
 
       // Quick client-side check for coordinators/admins
@@ -70,7 +74,7 @@ export function ClinicalDetailsEditor({
       }
 
       // Check if user is the case creator
-      if (session.user.id === caseCreatedById) {
+      if (userId === caseCreatedById) {
         setCanEdit(true);
         setCheckingPermission(false);
         return;
@@ -94,10 +98,14 @@ export function ClinicalDetailsEditor({
     };
 
     checkPermissions();
-  }, [caseId, caseCreatedById, session]);
+  }, [caseId, caseCreatedById, userId, userRole, userDepartmentId]);
 
   // Use ref to track previous initialData to avoid infinite loops
   const prevInitialDataRef = useRef<string>();
+
+  useEffect(() => {
+    onContentGetter?.(() => content);
+  }, [content, onContentGetter]);
 
   // Update content when initialData changes
   useEffect(() => {
@@ -130,17 +138,10 @@ export function ClinicalDetailsEditor({
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Process images: upload base64 images to MinIO and replace with storageKeys
-      const processedContent = await processEditorImages(
-        content,
-        caseId,
-        "clinical"
-      );
-
       const response = await fetch(`/api/cases/${caseId}/clinical-details`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clinicalDetails: processedContent }),
+        body: JSON.stringify({ clinicalDetails: content }),
       });
 
       if (response.ok) {
@@ -210,4 +211,3 @@ export function ClinicalDetailsEditor({
     </Card>
   );
 }
-

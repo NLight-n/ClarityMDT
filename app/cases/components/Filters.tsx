@@ -43,7 +43,8 @@ export function Filters({
   const hasFilters = status !== null || departmentId !== null || meetingId !== null || (search !== null && search.trim() !== "");
 
   return (
-    <div className="flex flex-wrap items-end gap-4 p-4 border rounded-lg bg-card">
+    <div className="flex flex-wrap items-end gap-4 p-4 border rounded-lg bg-white shadow-sm">
+
       <div className="flex-1 min-w-[250px]">
         <Label htmlFor="search-filter">Search</Label>
         <div className="relative">

@@ -30,7 +30,7 @@ import { CaseStatus, Gender } from "@prisma/client";
 import { format } from "date-fns";
 import { Archive, Send, RotateCcw, Edit, Save, X, Loader2, Calendar, Trash2, FileText } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { isCoordinator } from "@/lib/permissions/client";
+import { isConsultant, isCoordinator, isRadOrPathConsultant } from "@/lib/permissions/client";
 import Link from "next/link";
 import {
   AlertDialog,
@@ -43,6 +43,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MessageDialog } from "@/components/ui/message-dialog";
+
+interface DepartmentOption {
+  id: string;
+  name: string;
+}
 
 interface CaseDetailsProps {
   caseData: {
@@ -59,6 +64,7 @@ interface CaseDetailsProps {
     diagnosisStage: string;
     treatmentPlan: string;
     question: string;
+    concernedDepartmentIds?: string[] | null;
     status: CaseStatus;
     createdBy: {
       id: string;
@@ -87,6 +93,7 @@ interface CaseDetailsProps {
     diagnosisStage: string;
     treatmentPlan: string;
     question: string;
+    concernedDepartmentIds: string[];
   }) => Promise<void>;
   saving?: boolean;
   saveStatus?: string;
@@ -100,6 +107,7 @@ interface CaseDetailsProps {
     diagnosisStage: string;
     treatmentPlan: string;
     question: string;
+    concernedDepartmentIds: string[];
   }) => void;
   onRegisterFormDataGetter?: (getter: () => {
     patientName: string;
@@ -109,6 +117,7 @@ interface CaseDetailsProps {
     diagnosisStage: string;
     treatmentPlan: string;
     question: string;
+    concernedDepartmentIds: string[];
   }) => void;
 }
 
@@ -141,6 +150,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const [attendees, setAttendees] = useState<any[]>([]);
   const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
   
   // MessageDialog state
   const [messageDialog, setMessageDialog] = useState<{
@@ -177,6 +187,9 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     diagnosisStage: caseData.diagnosisStage,
     treatmentPlan: caseData.treatmentPlan,
     question: caseData.question,
+    concernedDepartmentIds: Array.isArray(caseData.concernedDepartmentIds)
+      ? caseData.concernedDepartmentIds
+      : [],
   });
 
   const user = session?.user
@@ -184,16 +197,29 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
         id: session.user.id,
         role: session.user.role,
         departmentId: session.user.departmentId,
+        departmentName: (session.user as any).departmentName || null,
       }
     : null;
 
-  // Can edit if status is DRAFT, SUBMITTED, PENDING, or RESUBMITTED, and user is author/coordinator/admin
+  // Can edit if:
+  // 1. Author/Creator can edit DRAFT, SUBMITTED, PENDING, or RESUBMITTED
+  // 2. Coordinator/Admin can edit DRAFT, SUBMITTED, PENDING, or RESUBMITTED
+  // 3. Radiology/Pathology consultants can edit SUBMITTED, PENDING, or RESUBMITTED (but NOT DRAFT)
+  const isAuthor = caseData.createdBy.id === user?.id;
+  const isCoord = isCoordinator(user);
+  const isRadPath = isRadOrPathConsultant(user);
+  const isSameDepartmentConsultant =
+    !!user &&
+    isConsultant(user) &&
+    !!user.departmentId &&
+    user.departmentId === caseData.presentingDepartment.id;
+
   const canEdit = 
-    (caseData.status === CaseStatus.DRAFT || 
-     caseData.status === CaseStatus.SUBMITTED || 
-     caseData.status === CaseStatus.PENDING ||
-     caseData.status === CaseStatus.RESUBMITTED) &&
-    (caseData.createdBy.id === user?.id || isCoordinator(user));
+    (caseData.status === CaseStatus.DRAFT && (isAuthor || isCoord)) ||
+    ((caseData.status === CaseStatus.SUBMITTED || 
+      caseData.status === CaseStatus.PENDING ||
+      caseData.status === CaseStatus.RESUBMITTED) &&
+     (isAuthor || isCoord || isRadPath || isSameDepartmentConsultant));
   const canSubmit = caseData.status === CaseStatus.DRAFT;
   const canArchive = isCoordinator(user) && caseData.status !== CaseStatus.ARCHIVED;
   const canResubmit = caseData.status === CaseStatus.REVIEWED;
@@ -216,6 +242,26 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const prevCaseDataRef = useRef(caseData);
 
   useEffect(() => {
+    const loadDepartmentOptions = async () => {
+      try {
+        const response = await fetch("/api/departments");
+        if (!response.ok) return;
+        const departments = await response.json();
+        setDepartmentOptions(
+          departments.map((department: any) => ({
+            id: department.id,
+            name: department.name,
+          }))
+        );
+      } catch (error) {
+        console.error("Error loading department options:", error);
+      }
+    };
+
+    loadDepartmentOptions();
+  }, []);
+
+  useEffect(() => {
     // Only sync formData from caseData when:
     // 1. Not in editing mode (to avoid overwriting user edits)
     // 2. caseData actually changed (not just a reference change)
@@ -226,7 +272,9 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       prevCaseDataRef.current.gender !== caseData.gender ||
       prevCaseDataRef.current.diagnosisStage !== caseData.diagnosisStage ||
       prevCaseDataRef.current.treatmentPlan !== caseData.treatmentPlan ||
-      prevCaseDataRef.current.question !== caseData.question;
+      prevCaseDataRef.current.question !== caseData.question ||
+      JSON.stringify(prevCaseDataRef.current.concernedDepartmentIds || []) !==
+        JSON.stringify(caseData.concernedDepartmentIds || []);
     
     if (!isEditing && caseDataChanged) {
     setFormData({
@@ -237,6 +285,9 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       diagnosisStage: caseData.diagnosisStage,
       treatmentPlan: caseData.treatmentPlan,
       question: caseData.question,
+      concernedDepartmentIds: Array.isArray(caseData.concernedDepartmentIds)
+        ? caseData.concernedDepartmentIds
+        : [],
     });
     }
     
@@ -254,6 +305,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
         diagnosisStage: formData.diagnosisStage.trim(),
         treatmentPlan: formData.treatmentPlan.trim(),
         question: formData.question.trim(),
+        concernedDepartmentIds: Array.from(new Set(formData.concernedDepartmentIds)),
       }));
     }
   }, [formData, onRegisterFormDataGetter]);
@@ -270,6 +322,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           diagnosisStage: formData.diagnosisStage.trim(),
           treatmentPlan: formData.treatmentPlan.trim(),
           question: formData.question.trim(),
+          concernedDepartmentIds: Array.from(new Set(formData.concernedDepartmentIds)),
         });
       }, 100);
       
@@ -786,6 +839,8 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   };
 
   const handleSave = async () => {
+    const uniqueConcernedDepartmentIds = Array.from(new Set(formData.concernedDepartmentIds));
+
     // Update parent formData before saving - ensure immediate sync
     const currentFormData = {
       patientName: formData.patientName.trim(),
@@ -795,6 +850,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       diagnosisStage: formData.diagnosisStage.trim(),
       treatmentPlan: formData.treatmentPlan.trim(),
       question: formData.question.trim(),
+      concernedDepartmentIds: uniqueConcernedDepartmentIds,
     };
     
     if (onFormDataChange) {
@@ -822,6 +878,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           diagnosisStage: formData.diagnosisStage.trim(),
           treatmentPlan: formData.treatmentPlan.trim(),
           question: formData.question.trim(),
+          concernedDepartmentIds: uniqueConcernedDepartmentIds,
         }),
       });
 
@@ -852,6 +909,27 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   };
   
   const isSaving = externalSaving !== undefined ? externalSaving : saving;
+  const selectedConcernedDepartmentIds = Array.isArray(caseData.concernedDepartmentIds)
+    ? caseData.concernedDepartmentIds
+    : [];
+  const selectedConcernedDepartmentNames = selectedConcernedDepartmentIds
+    .map((departmentId) => departmentOptions.find((option) => option.id === departmentId)?.name)
+    .filter((name): name is string => Boolean(name));
+
+  const handleConcernedDepartmentToggle = (departmentId: string, checked: boolean) => {
+    setFormData((prev) => {
+      if (checked) {
+        return {
+          ...prev,
+          concernedDepartmentIds: Array.from(new Set([...prev.concernedDepartmentIds, departmentId])),
+        };
+      }
+      return {
+        ...prev,
+        concernedDepartmentIds: prev.concernedDepartmentIds.filter((id) => id !== departmentId),
+      };
+    });
+  };
 
   const handleCancel = () => {
     setFormData({
@@ -862,6 +940,9 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       diagnosisStage: caseData.diagnosisStage,
       treatmentPlan: caseData.treatmentPlan,
       question: caseData.question,
+      concernedDepartmentIds: Array.isArray(caseData.concernedDepartmentIds)
+        ? caseData.concernedDepartmentIds
+        : [],
     });
     setIsEditing(false);
     // Reset will be handled by child components via useEffect
@@ -1679,6 +1760,54 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           )}
         </CardContent>
       </Card>
+
+      {/* Concerned Departments */}
+      <Card>
+        <CardHeader className="pt-3 pb-2">
+          <CardTitle>Concerned Departments</CardTitle>
+        </CardHeader>
+        <CardContent className="pt-2 pb-3">
+          {isEditing ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Select departments from which expert opinions are needed.
+              </p>
+              {departmentOptions.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No departments available.</p>
+              ) : (
+                <div className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                  {departmentOptions.map((department) => {
+                    const checkboxId = `concerned-department-${department.id}`;
+                    return (
+                      <div key={department.id} className="flex items-center space-x-2 min-h-8">
+                        <Checkbox
+                          id={checkboxId}
+                          checked={formData.concernedDepartmentIds.includes(department.id)}
+                          onCheckedChange={(checked) =>
+                            handleConcernedDepartmentToggle(department.id, checked === true)
+                          }
+                          disabled={isSaving}
+                        />
+                        <Label htmlFor={checkboxId} className="cursor-pointer">
+                          {department.name}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap">
+              {selectedConcernedDepartmentNames.length > 0
+                ? selectedConcernedDepartmentNames.join(", ")
+                : selectedConcernedDepartmentIds.length > 0
+                ? `${selectedConcernedDepartmentIds.length} department(s) selected`
+                : "—"}
+            </p>
+          )}
+        </CardContent>
+      </Card>
                     </>
                   )}
 
@@ -1929,4 +2058,3 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     </div>
   );
 }
-

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
 import { createNotificationsForUsers } from "@/lib/notifications/createNotification";
 import { NotificationType } from "@prisma/client";
+import { decryptCaseData } from "@/lib/security/phiCaseWrapper";
 
 const createConsensusSchema = z.object({
   finalDiagnosis: z.string().min(1, "Final diagnosis is required"),
@@ -157,6 +158,7 @@ export async function POST(
         select: {
           createdById: true,
           patientName: true,
+          mrn: true,
           presentingDepartment: {
             select: { id: true, name: true },
           },
@@ -164,6 +166,7 @@ export async function POST(
       });
 
       if (caseRecord) {
+        const decryptedCaseRecord = decryptCaseData(caseRecord);
         const recipients = new Set<string>();
         if (caseRecord.createdById) {
           recipients.add(caseRecord.createdById);
@@ -180,11 +183,12 @@ export async function POST(
           deptConsultants.forEach((u) => recipients.add(u.id));
         }
 
-        if (recipients.size > 0) {
+        if (recipients.size > 0 && decryptedCaseRecord) {
+          const patientLabel = `${decryptedCaseRecord.patientName} (MRN: ${decryptedCaseRecord.mrn || "N/A"})`;
           await createNotificationsForUsers(Array.from(recipients), {
           type: NotificationType.MDT_REVIEW_COMPLETED,
           title: "MDT Review Completed",
-            message: `MDT review completed for ${caseRecord.patientName}. Consensus report generated.`,
+            message: `MDT review completed for ${patientLabel}. Consensus report generated.`,
           caseId: caseId,
         });
         }
@@ -375,4 +379,3 @@ export async function PATCH(
     );
   }
 }
-

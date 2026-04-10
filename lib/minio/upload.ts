@@ -79,16 +79,19 @@ export async function uploadStream(
  * Generate a storage key for a case attachment
  * @param caseId - The case ID
  * @param fileName - The original file name
+ * @param customTimestamp - Optional timestamp to use (for grouping related files)
  * @returns The storage key
  */
 export function generateCaseAttachmentKey(
   caseId: string,
-  fileName: string
+  fileName: string,
+  customTimestamp?: number
 ): string {
-  const timestamp = Date.now();
+  const timestamp = customTimestamp || Date.now();
   const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
   return `cases/${caseId}/attachments/${timestamp}-${sanitizedFileName}`;
 }
+
 
 /**
  * Generate a storage key for an inline radiology image
@@ -149,5 +152,20 @@ export function generateBackupKey(
 ): string {
   const ext = extension || (type === "database" ? "sql" : "tar.gz");
   return `backups/${type}/${timestamp}.${ext}`;
+}
+
+/**
+ * Generate a storage key for a DICOM zip file
+ * @param caseId - The case ID
+ * @param fileName - The original file name
+ * @returns The storage key
+ */
+export function generateDicomStorageKey(
+  caseId: string,
+  fileName: string
+): string {
+  const timestamp = Date.now();
+  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  return `cases/${caseId}/dicom/${timestamp}-${sanitizedFileName}`;
 }
 

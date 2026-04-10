@@ -60,7 +60,8 @@ export function CasesTable({ cases }: CasesTableProps) {
   }
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border bg-white shadow-sm">
+
       <Table>
         <TableHeader>
           <TableRow>

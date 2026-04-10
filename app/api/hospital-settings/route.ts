@@ -21,6 +21,7 @@ export async function GET() {
       return NextResponse.json({
         name: null,
         logoUrl: null,
+        defaultCountryCode: "+91",
       }, {
         headers: {
           'Content-Type': 'application/json',
@@ -31,6 +32,7 @@ export async function GET() {
     return NextResponse.json({
       name: settings.name,
       logoUrl: settings.logoUrl,
+      defaultCountryCode: settings.defaultCountryCode,
     }, {
       headers: {
         'Content-Type': 'application/json',
@@ -43,6 +45,7 @@ export async function GET() {
       {
         name: null,
         logoUrl: null,
+        defaultCountryCode: "+91",
         error: "Failed to fetch hospital settings",
       },
       {
@@ -75,12 +78,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { name, logoUrl } = body;
+    const { name, logoUrl, defaultCountryCode } = body;
 
     // Validate that at least one field is provided
-    if (name === undefined && logoUrl === undefined) {
+    if (name === undefined && logoUrl === undefined && defaultCountryCode === undefined) {
       return NextResponse.json(
-        { error: "At least one field (name or logoUrl) must be provided" },
+        { error: "At least one field (name, logoUrl, or defaultCountryCode) must be provided" },
         { status: 400 }
       );
     }
@@ -93,6 +96,10 @@ export async function PATCH(request: NextRequest) {
     
     if (name !== undefined) {
       updateData.name = name?.trim() || null;
+    }
+
+    if (defaultCountryCode !== undefined) {
+      updateData.defaultCountryCode = defaultCountryCode?.trim() || "+91";
     }
 
     // Handle logo upload - if it's a base64 data URL, upload to MinIO
@@ -140,6 +147,7 @@ export async function PATCH(request: NextRequest) {
         data: {
           name: updateData.name ?? null,
           logoUrl: updateData.logoUrl ?? null,
+          defaultCountryCode: updateData.defaultCountryCode ?? "+91",
         },
       });
     }
@@ -153,9 +161,12 @@ export async function PATCH(request: NextRequest) {
         newName: settings.name,
         previousLogoUrl: previousSettings?.logoUrl || null,
         newLogoUrl: settings.logoUrl,
+        previousDefaultCountryCode: previousSettings?.defaultCountryCode || null,
+        newDefaultCountryCode: settings.defaultCountryCode,
         changes: {
           name: name !== undefined,
           logoUrl: logoUrl !== undefined,
+          defaultCountryCode: defaultCountryCode !== undefined,
         },
       },
       ipAddress: getIpAddress(request.headers),
@@ -164,6 +175,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({
       name: settings.name,
       logoUrl: settings.logoUrl,
+      defaultCountryCode: settings.defaultCountryCode,
     });
   } catch (error) {
     console.error("Error updating hospital settings:", error);

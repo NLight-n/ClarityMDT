@@ -18,6 +18,7 @@ const createCaseSchema = z.object({
   diagnosisStage: z.string().min(1, "Diagnosis stage is required"),
   treatmentPlan: z.string().optional(),
   question: z.string().min(1, "Discussion question is required"),
+  concernedDepartmentIds: z.array(z.string()).optional(),
   links: z.array(z.object({ label: z.string(), url: z.string().url() })).optional(),
 });
 
@@ -211,6 +212,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (validatedData.concernedDepartmentIds && validatedData.concernedDepartmentIds.length > 0) {
+      const uniqueIds = Array.from(new Set(validatedData.concernedDepartmentIds));
+      const existingDepartments = await prisma.department.findMany({
+        where: { id: { in: uniqueIds } },
+        select: { id: true },
+      });
+      if (existingDepartments.length !== uniqueIds.length) {
+        return NextResponse.json(
+          { error: "One or more concerned departments are invalid" },
+          { status: 400 }
+        );
+      }
+    }
+
     // If user is a Coordinator with a department, they can only create cases for their own department
     // (Acting like a consultant for their department)
     if (isCoordinator(user) && user.departmentId && !isAdmin(user)) {
@@ -242,23 +257,28 @@ export async function POST(request: NextRequest) {
       mrn: validatedData.mrn,
     });
 
+    const caseCreateData: any = {
+      patientName: encryptedData.patientName!,
+      mrn: encryptedData.mrn,
+      age: validatedData.age,
+      gender: validatedData.gender,
+      presentingDepartmentId: validatedData.presentingDepartmentId,
+      clinicalDetails: validatedData.clinicalDetails,
+      radiologyFindings: radiologyFindings,
+      pathologyFindings: pathologyFindings,
+      diagnosisStage: validatedData.diagnosisStage,
+      treatmentPlan: validatedData.treatmentPlan || "",
+      question: validatedData.question,
+      concernedDepartmentIds: validatedData.concernedDepartmentIds && validatedData.concernedDepartmentIds.length > 0
+        ? validatedData.concernedDepartmentIds
+        : undefined,
+      links: validatedData.links && validatedData.links.length > 0 ? validatedData.links : undefined,
+      status: CaseStatus.DRAFT,
+      createdById: user.id,
+    };
+
     const newCase = await prisma.case.create({
-      data: {
-        patientName: encryptedData.patientName!,
-        mrn: encryptedData.mrn,
-        age: validatedData.age,
-        gender: validatedData.gender,
-        presentingDepartmentId: validatedData.presentingDepartmentId,
-        clinicalDetails: validatedData.clinicalDetails,
-        radiologyFindings: radiologyFindings,
-        pathologyFindings: pathologyFindings,
-        diagnosisStage: validatedData.diagnosisStage,
-        treatmentPlan: validatedData.treatmentPlan || "",
-        question: validatedData.question,
-        links: validatedData.links && validatedData.links.length > 0 ? validatedData.links : undefined,
-        status: CaseStatus.DRAFT,
-        createdById: user.id,
-      },
+      data: caseCreateData,
       include: {
         presentingDepartment: {
           select: {
@@ -291,4 +311,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -12,6 +12,7 @@ import { isAdmin } from "@/lib/permissions/client";
 interface HospitalSettings {
   name: string | null;
   logoUrl: string | null;
+  defaultCountryCode: string;
 }
 
 export function HospitalSettings() {
@@ -22,10 +23,12 @@ export function HospitalSettings() {
   const [settings, setSettings] = useState<HospitalSettings>({
     name: null,
     logoUrl: null,
+    defaultCountryCode: "+91",
   });
   const [formData, setFormData] = useState({
     name: "",
     logoUrl: "",
+    defaultCountryCode: "+91",
   });
 
   const user = session?.user
@@ -46,6 +49,7 @@ export function HospitalSettings() {
     setFormData({
       name: settings.name || "",
       logoUrl: settings.logoUrl || "",
+      defaultCountryCode: settings.defaultCountryCode || "+91",
     });
   }, [settings]);
 
@@ -80,6 +84,7 @@ export function HospitalSettings() {
         body: JSON.stringify({
           name: formData.name.trim() || null,
           logoUrl: formData.logoUrl.trim() || null,
+          defaultCountryCode: formData.defaultCountryCode.trim() || "+91",
         }),
       });
 
@@ -179,6 +184,20 @@ export function HospitalSettings() {
             />
             <p className="text-xs text-muted-foreground">
               This will be displayed in the topbar. Leave empty to hide.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="defaultCountryCode">Default Phone Country Code</Label>
+            <Input
+              id="defaultCountryCode"
+              value={formData.defaultCountryCode}
+              onChange={(e) => setFormData({ ...formData, defaultCountryCode: e.target.value })}
+              placeholder="e.g., +91"
+              disabled={saving}
+            />
+            <p className="text-xs text-muted-foreground">
+              This country code will be selected by default when users enter their phone numbers.
             </p>
           </div>
 

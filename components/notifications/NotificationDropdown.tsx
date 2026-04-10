@@ -52,11 +52,14 @@ export function NotificationDropdown({ userId }: NotificationDropdownProps) {
     try {
       const response = await fetch("/api/notifications?limit=10&unreadOnly=true");
       if (response.ok) {
-        const data = await response.json();
-        // Filter to only show unread notifications
-        const unreadNotifications = (data.notifications || []).filter((n: Notification) => !n.read);
-        setNotifications(unreadNotifications);
-        setUnreadCount(data.unreadCount || 0);
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          // Filter to only show unread notifications
+          const unreadNotifications = (data.notifications || []).filter((n: Notification) => !n.read);
+          setNotifications(unreadNotifications);
+          setUnreadCount(data.unreadCount || 0);
+        }
       }
     } catch (error) {
       console.error("Error fetching notifications:", error);

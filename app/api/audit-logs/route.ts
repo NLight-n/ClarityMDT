@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
-import { isAdmin } from "@/lib/permissions/accessControl";
+import { isCoordinator } from "@/lib/permissions/accessControl";
 import { AuditAction } from "@/lib/audit/logger";
+import { decryptCaseDataArray } from "@/lib/security/phiCaseWrapper";
+import { decryptPHI } from "@/lib/security/phiEncryption";
 
 /**
  * GET /api/audit-logs - Get audit logs with filtering and pagination
- * Only admins can access audit logs
+ * Only coordinators/admins can access audit logs
  */
 export async function GET(request: NextRequest) {
   try {
@@ -16,8 +18,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admins can view audit logs
-    if (!isAdmin(user)) {
+    // Only coordinators/admins can view audit logs
+    if (!isCoordinator(user)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -95,11 +97,42 @@ export async function GET(request: NextRequest) {
         })
       : [];
 
-    const caseMap = new Map(cases.map((c) => [c.id, c]));
+    // Decrypt case information
+    const decryptedCases = decryptCaseDataArray(cases);
+    const caseMap = new Map(decryptedCases.map((c) => [c.id, c]));
 
     // Format the response
     const formattedLogs = auditLogs.map((log) => {
       const caseInfo = log.caseId ? caseMap.get(log.caseId) : null;
+      let details = log.details ? JSON.parse(log.details) : null;
+
+      // Decrypt known PHI fields in details
+      if (details) {
+        if (typeof details.patientName === "string") {
+          details.patientName = decryptPHI(details.patientName);
+        }
+        if (typeof details.mrn === "string") {
+          details.mrn = decryptPHI(details.mrn);
+        }
+        
+        // Decrypt changes if they exist (for CASE_UPDATE logs)
+        if (details.changes && typeof details.changes === "object") {
+          for (const key in details.changes) {
+            if (key === "patientName" || key === "mrn") {
+              const change = details.changes[key];
+              if (change && typeof change === "object") {
+                if (typeof change.old === "string") {
+                  change.old = decryptPHI(change.old);
+                }
+                if (typeof change.new === "string") {
+                  change.new = decryptPHI(change.new);
+                }
+              }
+            }
+          }
+        }
+      }
+
       return {
         id: log.id,
         action: log.action,
@@ -111,7 +144,7 @@ export async function GET(request: NextRequest) {
         casePatientName: caseInfo?.patientName || null,
         caseMrn: caseInfo?.mrn || null,
         targetUserId: log.targetUserId,
-        details: log.details ? JSON.parse(log.details) : null,
+        details,
         ipAddress: log.ipAddress,
         createdAt: log.createdAt,
       };

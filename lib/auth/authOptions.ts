@@ -132,6 +132,7 @@ export const authOptions: NextAuthConfig = {
             loginId: user.loginId,
             role: user.role,
             departmentId: user.departmentId,
+            departmentName: user.department?.name || null,
           };
         } catch (error) {
           // Re-throw rate limit errors to be displayed to user
@@ -147,28 +148,30 @@ export const authOptions: NextAuthConfig = {
   session: {
     strategy: "jwt",
     // HIPAA Compliance: §164.312(a)(2)(iii) - Automatic logoff
-    // Session expires after 15 minutes of inactivity
+    // Session expires after 30 minutes of inactivity
     // This can be configured via environment variable
-    maxAge: parseInt(process.env.SESSION_MAX_AGE_MINUTES || "15", 10) * 60,
+    maxAge: parseInt(process.env.SESSION_MAX_AGE_MINUTES || "30", 10) * 60,
     // Update session every 5 minutes to extend if active
     updateAge: 5 * 60,
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         token.userId = user.id;
         token.role = user.role;
         token.departmentId = user.departmentId;
+        token.departmentName = user.departmentName;
         token.loginId = user.loginId;
         token.name = user.name;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: any; token: any }) {
       if (session.user) {
         session.user.id = token.userId as string;
         session.user.role = token.role as Role;
         session.user.departmentId = token.departmentId as string | null;
+        session.user.departmentName = token.departmentName as string | null;
         session.user.loginId = token.loginId as string;
       }
       return session;
@@ -205,4 +208,3 @@ export const authOptions: NextAuthConfig = {
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
-

@@ -50,26 +50,24 @@ app:
     consultant:
       - add_cases
       - edit_cases_in_own_department
+      - edit_radiology_and_pathology_findings_in_own_department
+      - edit_all_case_details_if_radiology_or_pathology
       - view_cases_in_own_department
       - add_specialist_opinion
       - edit_own_specialist_opinion
-      - edit_radiology_findings_if_radiology_department
-      - edit_pathology_findings_if_pathology_department
       - resubmit_case
 
     viewer:
       - view_all_cases
 
   department_rules:
-    radiology_editing:
+    unified_consultant_editing:
       description: |
-        Radiology department consultants may edit radiologyFindings,
-        including rich text and inline images.
-
-    pathology_editing:
-      description: |
-        Pathology department consultants may edit pathologyFindings,
-        including rich text and inline images.
+        Radiology and pathology consultants can edit all the case details 
+        (including dicom & links, attachments). The only thing they can't edit 
+        is the consensus report, which can be done only by admin and co-ordinator. 
+        Similarly, consultants who have cases in their own department can also edit 
+        Radiology and pathology findings.
 
     specialists_opinion:
       description: |
@@ -205,14 +203,16 @@ ui:
         - radiologyFindings:
             type: richtext_with_inline_images
             editable_by:
-              - radiology_consultants
+              - consultants_in_own_department
+              - radiology_or_pathology_consultants
               - coordinator
               - admin
 
         - pathologyFindings:
             type: richtext_with_inline_images
             editable_by:
-              - pathology_consultants
+              - consultants_in_own_department
+              - radiology_or_pathology_consultants
               - coordinator
               - admin
 
@@ -253,11 +253,13 @@ workflows:
         * save JSON into the case record
     - permissions:
         radiologyFindings:
-          - radiology consultants
+          - consultants_in_own_department
+          - radiology_or_pathology_consultants
           - coordinator
           - admin
         pathologyFindings:
-          - pathology consultants
+          - consultants_in_own_department
+          - radiology_or_pathology_consultants
           - coordinator
           - admin
   
@@ -349,11 +351,13 @@ api:
 security:
   inline_image_permissions:
     radiology_findings:
-      - radiology consultants
+      - consultants_in_own_department
+      - radiology_or_pathology_consultants
       - coordinator
       - admin
     pathology_findings:
-      - pathology consultants
+      - consultants_in_own_department
+      - radiology_or_pathology_consultants
       - coordinator
       - admin
   

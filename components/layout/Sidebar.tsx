@@ -9,6 +9,7 @@ import {
   Calendar,
   Settings,
   ClipboardList,
+  Handshake,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -55,33 +56,58 @@ export function Sidebar({ userRole, className }: SidebarProps) {
   const pathname = usePathname();
   const isRegisterPage = pathname === "/register" || pathname?.startsWith("/register/");
 
+  const sidebarLogo = (
+    <div className="px-6 py-8 border-b border-neutral-900">
+      <Link href="/dashboard" className="flex items-center gap-2">
+        <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center">
+          <Handshake className="h-5 w-5 text-black" />
+        </div>
+        <span className="text-xl font-bold tracking-tight text-white">ClarityMDT</span>
+      </Link>
+    </div>
+  );
+
+  const sidebarContent = (
+    <nav className="space-y-1 px-3 py-4">
+      {navigation.map((item) => {
+        const Icon = item.icon;
+        const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+        return (
+          <Link
+            key={item.name}
+            href={item.href}
+            className={cn(
+              "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+              isActive
+                ? "bg-white text-black shadow-lg shadow-black/10 scale-[1.02]"
+                : "text-neutral-400 hover:text-white hover:bg-neutral-900"
+            )}
+          >
+            <Icon className={cn("h-4.5 w-4.5", isActive ? "text-black" : "text-neutral-400")} />
+            {item.name}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+
+  const sidebarFooter = (
+    <div className="border-t border-neutral-900 px-4 py-3 text-[11px] leading-relaxed text-neutral-500">
+      <p>Built to improve collaboration and efficiency in multidisciplinary team meetings.</p>
+      <p className="mt-1"><span className="font-semibold text-neutral-300">ClarityMDT</span> &copy; 2026 All rights reserved.</p>
+    </div>
+  );
+
   // For Register page, show calendar and upcoming meetings below navigation
   if (isRegisterPage) {
     return (
-      <div className={cn("flex h-full w-64 flex-col border-r bg-card overflow-hidden", className)}>
-        <nav className="flex-shrink-0 space-y-1 px-3 py-4 border-b">
-          {navigation.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
-            return (
-              <Link
-                key={item.name}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                )}
-              >
-                <Icon className="h-5 w-5" />
-                {item.name}
-              </Link>
-            );
-          })}
-        </nav>
-        <div className="flex-1 overflow-y-auto px-3 py-4">
-          <CalendarSidebar />
+      <div className={cn("flex h-full w-64 flex-col border-r border-neutral-900 bg-neutral-950 overflow-hidden", className)}>
+        {sidebarLogo}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-neutral-800">
+          {sidebarContent}
+          <div className="px-1 pb-8 dark">
+             <CalendarSidebar />
+          </div>
         </div>
       </div>
     );
@@ -89,29 +115,16 @@ export function Sidebar({ userRole, className }: SidebarProps) {
 
   // For other pages, show normal sidebar
   return (
-    <div className={cn("flex h-full w-64 flex-col border-r bg-card", className)}>
-      <nav className="flex-1 space-y-1 px-3 py-4">
-        {navigation.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
-          return (
-            <Link
-              key={item.name}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              {item.name}
-            </Link>
-          );
-        })}
-      </nav>
+    <div className={cn("flex h-full w-64 flex-col border-r border-neutral-900 bg-neutral-950", className)}>
+      {sidebarLogo}
+      <div className="flex-1 overflow-y-auto">
+        {sidebarContent}
+      </div>
+      {sidebarFooter}
     </div>
   );
 }
+
+
+
 

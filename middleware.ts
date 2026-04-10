@@ -24,16 +24,31 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(httpsUrl.toString(), 301);
   }
 
-  // Allow access to login page, setup page, and API auth routes
+  // Allow access to login page, setup page, API auth routes, and OHIF viewer static assets
   // Also allow public API routes that don't require authentication
+  // OHIF viewer loads dynamic chunks from root paths (e.g., /3584.bundle.*.js, /*.wasm)
+  // These get rewritten to /ohif-viewer/ by next.config.ts, but middleware runs before rewrites
+  // We must detect and bypass ALL static assets the OHIF viewer needs
+  const ext = pathname.split('.').pop()?.toLowerCase() || '';
+  const staticExtensions = ['js', 'css', 'wasm', 'woff', 'woff2', 'svg', 'png', 'ico', 'json', 'html', 'map'];
+  const isOhifAsset =
+    pathname.startsWith("/ohif-viewer") ||
+    pathname.startsWith("/assets") ||
+    pathname.startsWith("/dicom-microscopy-viewer") ||
+    pathname.startsWith("/ort") ||
+    (staticExtensions.includes(ext) && !pathname.startsWith("/api/"));
+
   if (
     pathname.startsWith("/login") ||
     pathname.startsWith("/setup") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/setup") ||
     pathname.startsWith("/api/hospital-settings") ||
+    pathname.startsWith("/api/dicom-proxy") ||
+    pathname.startsWith("/api/images") ||
     pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon.ico")
+    pathname.startsWith("/favicon.ico") ||
+    isOhifAsset
   ) {
     const response = NextResponse.next();
 
@@ -118,15 +133,18 @@ export const config = {
      * - api/auth (NextAuth routes)
      * - api/setup (Setup routes)
      * - api/hospital-settings (Public hospital settings endpoint)
+     * - api/dicom-proxy (DICOM WebWorker fetch proxy)
+     * - api/images (Publicly accessible static images like hospital logos)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - login (login page)
      * - setup (setup page)
+     * - ohif-viewer (OHIF DICOM viewer static assets)
      * 
      * This includes root path "/" and all dashboard routes
      */
-    "/((?!api/auth|api/setup|api/hospital-settings|_next/static|_next/image|favicon.ico|login|setup).*)",
+    "/((?!api/auth|api/setup|api/hospital-settings|api/dicom-proxy|api/images|_next/static|_next/image|favicon.ico|login|setup|ohif-viewer).*)",
     "/", // Explicitly include root path
   ],
 };

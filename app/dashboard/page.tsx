@@ -35,6 +35,8 @@ interface Statistics {
   pendingCases: number;
   upcomingMeetings: number;
   totalUsers: number;
+  totalStorageUsed?: number;
+  totalStorageLimit?: number;
 }
 
 export default function DashboardPage() {
@@ -166,6 +168,47 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Storage Capacity Widget */}
+      {statistics && statistics.totalStorageUsed !== undefined && statistics.totalStorageLimit !== undefined && (
+        <Card className="border-blue-200 bg-gradient-to-r from-slate-50 to-blue-50/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-md flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
+                Data Storage Footprint
+              </span>
+              <span className="text-sm font-normal text-muted-foreground">
+                {(statistics.totalStorageUsed / Math.pow(1024, 3)).toFixed(2)} GB / {(statistics.totalStorageLimit / Math.pow(1024, 3)).toFixed(0)} GB Quota
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="w-full bg-slate-200 rounded-full h-3 mb-2 shadow-inner overflow-hidden">
+              <div 
+                className={`h-3 rounded-full transition-all duration-500 ease-out ${
+                  (statistics.totalStorageUsed / statistics.totalStorageLimit) > 0.8 
+                    ? 'bg-red-500' 
+                    : (statistics.totalStorageUsed / statistics.totalStorageLimit) > 0.6 
+                    ? 'bg-yellow-400' 
+                    : 'bg-blue-600'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(1, (statistics.totalStorageUsed / statistics.totalStorageLimit) * 100))}%` }}
+              ></div>
+            </div>
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-muted-foreground">
+                {((statistics.totalStorageUsed / statistics.totalStorageLimit) * 100).toFixed(1)}% Used
+              </span>
+              {(statistics.totalStorageUsed / statistics.totalStorageLimit) > 0.8 && (
+                <span className="font-semibold text-red-600 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" /> Storage capacity critical
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid gap-6 md:grid-cols-2">

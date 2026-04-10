@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
+import { decryptCaseData } from "@/lib/security/phiCaseWrapper";
 
 /**
  * GET /api/notifications - Get notifications for current user
@@ -48,6 +49,10 @@ export async function GET(request: NextRequest) {
       },
       take: limit,
     });
+    const decryptedNotifications = notifications.map((notification) => ({
+      ...notification,
+      case: notification.case ? decryptCaseData(notification.case) : notification.case,
+    }));
 
     // Get unread count
     const unreadCount = await prisma.notification.count({
@@ -58,7 +63,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({
-      notifications,
+      notifications: decryptedNotifications,
       unreadCount,
     });
   } catch (error) {

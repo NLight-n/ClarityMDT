@@ -14,6 +14,7 @@ A comprehensive Multi-Disciplinary Team (MDT) case management system for healthc
 - **Notifications**: Real-time notifications for case updates, meeting assignments, and system events
 
 ### Communication & Integration
+- **WhatsApp Integration**: Official Meta Business API integration for template-based messaging and interactive notifications
 - **Telegram Integration**: Link Telegram accounts for notifications and case updates
 - **Email Notifications**: SMTP-based email notifications for important events
 - **Backup & Restore**: Automated database and file storage backups with restore functionality
@@ -30,7 +31,7 @@ Built-in security features for healthcare environments:
 - **HTTPS Enforcement**: Optional redirect + HSTS headers
 - **PHI Encryption**: AES-256-GCM encryption for patient data at rest
 - **Rate Limiting**: Brute-force protection (lockout after 5 failed attempts)
-- **Two-Factor Authentication**: Optional 2FA via Telegram
+- **Two-Factor Authentication**: Optional 2FA via WhatsApp or Telegram
 - **Audit Logging**: Comprehensive activity tracking
 
 > See [docs/HIPAA_COMPLIANCE.md](docs/HIPAA_COMPLIANCE.md) for detailed configuration.
@@ -228,6 +229,14 @@ Database migrations run automatically on application startup. The Prisma client 
 - View all cases (read-only)
 
 ## 🔧 Administration
+
+### WhatsApp Integration
+
+Configure WhatsApp notifications through the Admin settings:
+1. Navigate to Settings → Admin → WhatsApp Settings
+2. Enable WhatsApp features and securely store Meta API tokens (Phone Number ID, Access Token)
+3. Approve and map Meta message templates via the WhatsApp Templates manager
+4. Users seamlessly opt-in from their profile by toggling WhatsApp notifications for their primary mobile number
 
 ### Telegram Integration
 

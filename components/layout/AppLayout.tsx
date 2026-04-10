@@ -24,20 +24,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AlertProvider>
-      <div className="flex h-screen flex-col">
-        <Topbar userName={userName} userRole={userRole} />
-        <div className="flex flex-1 overflow-hidden">
-          {/* Desktop Sidebar */}
-          <aside className="hidden md:block w-64 flex-shrink-0">
-            <Sidebar userRole={userRole} />
-          </aside>
-          {/* Main Content */}
-          <main className="flex-1 overflow-y-auto bg-background">
+      <div className="flex h-screen overflow-hidden">
+        {/* Desktop Sidebar (Left Full-Height) */}
+        <aside className="hidden md:block w-64 flex-shrink-0">
+          <Sidebar userRole={userRole} />
+        </aside>
+
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Topbar userName={userName} userRole={userRole} />
+          <main className="flex-1 overflow-y-auto bg-neutral-50">
             {children}
           </main>
+
         </div>
       </div>
     </AlertProvider>
   );
 }
+
 

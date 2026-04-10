@@ -8,6 +8,7 @@ export interface CurrentUser {
   loginId: string;
   role: Role;
   departmentId: string | null;
+  departmentName: string | null;
 }
 
 export async function getCurrentUserFromRequest(
@@ -15,7 +16,7 @@ export async function getCurrentUserFromRequest(
 ): Promise<CurrentUser | null> {
   // Ensure NEXTAUTH_SECRET is available
   if (!process.env.NEXTAUTH_SECRET) {
-    console.error("NEXTAUTH_SECRET is not set");
+    console.warn("[getCurrentUser] NEXTAUTH_SECRET is not set");
     return null;
   }
 
@@ -55,6 +56,7 @@ export async function getCurrentUserFromRequest(
       loginId: (token.loginId as string) || "",
       role: token.role as Role,
       departmentId: (token.departmentId as string | null) || null,
+      departmentName: (token.departmentName as string | null) || null,
     };
   } catch (error) {
     console.error("Error getting current user from request:", error);

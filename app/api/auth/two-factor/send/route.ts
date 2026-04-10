@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
                 id: true,
                 passwordHash: true,
                 telegramId: true,
+                whatsappPhone: true,
                 twoFactorEnabled: true,
             },
         });
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Check if 2FA is enabled
-        if (!user.twoFactorEnabled || !user.telegramId) {
+        if (!user.twoFactorEnabled || (!user.telegramId && !user.whatsappPhone)) {
             return NextResponse.json(
                 {
                     requiresTwoFactor: false,
@@ -80,7 +81,10 @@ export async function POST(request: NextRequest) {
             requiresTwoFactor: true,
             codeSent: true,
             expiresAt: result.expiresAt.toISOString(),
-            message: "Verification code sent to your Telegram",
+            channel: result.channel,
+            message: result.channel === "whatsapp"
+                ? "Verification code sent to your WhatsApp"
+                : "Verification code sent to your Telegram",
         });
     } catch (error: any) {
         console.error("Error sending 2FA code:", error);
@@ -90,3 +94,4 @@ export async function POST(request: NextRequest) {
         );
     }
 }
+

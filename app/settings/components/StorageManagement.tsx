@@ -1,0 +1,450 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import {
+  Loader2,
+  HardDrive,
+  Trash2,
+  Search,
+  ArchiveRestore,
+  RefreshCw,
+} from "lucide-react";
+import { useSession } from "next-auth/react";
+import { isCoordinator } from "@/lib/permissions/client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { MessageDialog } from "@/components/ui/message-dialog";
+import { PruneDicomDialog } from "./PruneDicomDialog";
+
+interface DicomCaseEntry {
+  caseId: string;
+  patientName: string;
+  mrn: string | null;
+  department: string;
+  status: string;
+  totalSizeBytes: number;
+  files: Array<{
+    id: string;
+    type: "zip" | "folder";
+    fileName: string;
+    fileSize: number;
+    storageKey: string;
+  }>;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return "0 B";
+  const k = 1024;
+  const sizes = ["B", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+}
+
+function getStatusColor(status: string): string {
+  switch (status) {
+    case "DRAFT":
+      return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300";
+    case "SUBMITTED":
+      return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
+    case "PENDING":
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300";
+    case "REVIEWED":
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+    case "RESUBMITTED":
+      return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300";
+    case "ARCHIVED":
+      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300";
+    default:
+      return "";
+  }
+}
+
+export function StorageManagement() {
+  const { data: session } = useSession();
+  const [loading, setLoading] = useState(true);
+  const [cases, setCases] = useState<DicomCaseEntry[]>([]);
+  const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
+  const [isOrphanDialogOpen, setIsOrphanDialogOpen] = useState(false);
+  const [isPruneDialogOpen, setIsPruneDialogOpen] = useState(false);
+  const [deleteDialog, setDeleteDialog] = useState<{
+    open: boolean;
+    caseEntry: DicomCaseEntry | null;
+  }>({ open: false, caseEntry: null });
+  const [messageDialog, setMessageDialog] = useState<{
+    open: boolean;
+    type: "success" | "error" | "info";
+    title: string;
+    message: string;
+  }>({
+    open: false,
+    type: "success",
+    title: "",
+    message: "",
+  });
+
+  const user = session?.user
+    ? {
+        id: session.user.id,
+        role: session.user.role,
+        departmentId: session.user.departmentId,
+      }
+    : null;
+
+  const canManage = user && isCoordinator(user);
+
+  useEffect(() => {
+    if (canManage) {
+      loadStorageData();
+    }
+  }, [canManage]);
+
+  const loadStorageData = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch("/api/admin/dicom-storage");
+      if (response.ok) {
+        const data = await response.json();
+        setCases(data);
+      }
+    } catch (error) {
+      console.error("Error loading storage data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCleanOrphans = async () => {
+    setIsCleaningOrphans(true);
+    try {
+      const response = await fetch("/api/admin/dicom-storage/orphans", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessageDialog({
+          open: true,
+          type: "success",
+          title: "Orphan Cleanup Complete",
+          message: `Cleaned ${data.deletedCount} orphaned file(s), freeing ${formatBytes(data.deletedBytes)}.`,
+        });
+      } else {
+        const errorData = await response.json();
+        setMessageDialog({
+          open: true,
+          type: "error",
+          title: "Cleanup Failed",
+          message: errorData.error || "Failed to clean orphaned files",
+        });
+      }
+    } catch (error) {
+      console.error("Error cleaning orphans:", error);
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "Error",
+        message: "An error occurred during orphan cleanup",
+      });
+    } finally {
+      setIsCleaningOrphans(false);
+    }
+  };
+
+  const handleDeleteCaseDicom = async () => {
+    if (!deleteDialog.caseEntry) return;
+
+    try {
+      const response = await fetch("/api/admin/dicom-storage/prune", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseIds: [deleteDialog.caseEntry.caseId] }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCases((prev) =>
+          prev.filter((c) => c.caseId !== deleteDialog.caseEntry!.caseId)
+        );
+        setMessageDialog({
+          open: true,
+          type: "success",
+          title: "DICOM Data Deleted",
+          message: `Deleted ${data.deletedCount} file(s), freeing ${formatBytes(data.totalBytesFreed)}.`,
+        });
+      } else {
+        const errorData = await response.json();
+        setMessageDialog({
+          open: true,
+          type: "error",
+          title: "Error",
+          message: errorData.error || "Failed to delete DICOM data",
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting DICOM data:", error);
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "Error",
+        message: "An error occurred while deleting DICOM data",
+      });
+    } finally {
+      setDeleteDialog({ open: false, caseEntry: null });
+    }
+  };
+
+  const totalStorageUsed = cases.reduce((sum, c) => sum + c.totalSizeBytes, 0);
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!canManage) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <p className="text-muted-foreground">
+            Only administrators and coordinators can manage DICOM storage.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <HardDrive className="h-5 w-5" />
+                DICOM Storage Management
+              </CardTitle>
+              <CardDescription>
+                Monitor and manage DICOM data across all cases.{" "}
+                <span className="font-semibold">
+                  Total: {formatBytes(totalStorageUsed)}
+                </span>{" "}
+                across {cases.length} case(s).
+              </CardDescription>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadStorageData}
+                disabled={isCleaningOrphans}
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsOrphanDialogOpen(true)}
+                disabled={isCleaningOrphans}
+              >
+                {isCleaningOrphans ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Scanning...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Clean Orphaned Files
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setIsPruneDialogOpen(true)}
+                disabled={cases.filter((c) => c.status === "ARCHIVED").length === 0}
+              >
+                <ArchiveRestore className="mr-2 h-4 w-4" />
+                Prune Archive Data
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {cases.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <HardDrive className="h-12 w-12 mx-auto mb-4 opacity-20" />
+              <p>No DICOM data found.</p>
+              <p className="text-sm mt-2">
+                Upload DICOM folders to cases to see storage usage here.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Patient Name</TableHead>
+                    <TableHead>MRN</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">DICOM Size</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {cases.map((c) => (
+                    <TableRow key={c.caseId}>
+                      <TableCell className="font-medium">
+                        {c.patientName}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {c.mrn || "—"}
+                      </TableCell>
+                      <TableCell>{c.department}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs ${getStatusColor(c.status)}`}
+                        >
+                          {c.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm">
+                        {formatBytes(c.totalSizeBytes)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() =>
+                            setDeleteDialog({ open: true, caseEntry: c })
+                          }
+                          title="Delete DICOM data for this case"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Orphan Cleanup Confirmation Dialog */}
+      <AlertDialog
+        open={isOrphanDialogOpen}
+        onOpenChange={(open) => setIsOrphanDialogOpen(open)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clean Orphaned DICOM Files</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to scan and delete all orphaned DICOM files?
+              This will remove all raw data in storage that is not linked to any
+              active case in the database.
+              <br />
+              <br />
+              <span className="font-bold text-destructive">
+                This action is irreversible.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCleaningOrphans}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCleanOrphans}
+              disabled={isCleaningOrphans}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Start Cleanup
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete DICOM Confirmation Dialog */}
+      <AlertDialog
+        open={deleteDialog.open}
+        onOpenChange={(open) => setDeleteDialog({ open, caseEntry: null })}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete DICOM Data</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete all DICOM data for{" "}
+              <strong>{deleteDialog.caseEntry?.patientName}</strong>? This will
+              remove {formatBytes(deleteDialog.caseEntry?.totalSizeBytes || 0)}{" "}
+              of DICOM files from storage. Links, attachments, and consensus
+              reports will be preserved.
+              <br />
+              <br />
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCaseDicom}
+              className="bg-destructive text-destructive-foreground"
+            >
+              Delete DICOM Data
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Prune Archive Dialog */}
+      <PruneDicomDialog
+        open={isPruneDialogOpen}
+        onOpenChange={setIsPruneDialogOpen}
+        cases={cases}
+        onPruneComplete={loadStorageData}
+      />
+
+      {/* Status Message Dialog */}
+      <MessageDialog
+        open={messageDialog.open}
+        onOpenChange={(open) => setMessageDialog({ ...messageDialog, open })}
+        type={messageDialog.type}
+        title={messageDialog.title}
+        message={messageDialog.message}
+      />
+    </>
+  );
+}

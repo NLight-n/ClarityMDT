@@ -282,7 +282,8 @@ export default function MeetingsPage() {
         )}
 
         {meetings.length === 0 && (
-          <div className="text-center py-12 border rounded-lg">
+          <div className="text-center py-12 border rounded-lg bg-white shadow-sm">
+
             <p className="text-muted-foreground">No meetings found.</p>
           </div>
         )}

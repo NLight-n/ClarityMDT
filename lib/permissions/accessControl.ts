@@ -6,6 +6,7 @@ export interface User {
   id: string;
   role: Role;
   departmentId: string | null;
+  departmentName: string | null;
 }
 
 // Extended user type for database operations
@@ -107,7 +108,7 @@ export async function revokeCoordinator(userId: string): Promise<void> {
  * Check if user can edit a case
  * - Admin: can edit all cases
  * - Coordinator: can edit all cases
- * - Consultant: can edit cases in their own department or cases they created
+ * - Consultant: can edit cases in their own department, cases they created, or cases in Rad/Path (limited status)
  * - Viewer: cannot edit cases
  */
 export async function canEditCase(
@@ -126,23 +127,65 @@ export async function canEditCase(
     return false;
   }
 
-  // Consultant can edit cases in their own department or cases they created
+  // Consultant logic
   if (isConsultant(user)) {
     const caseRecord = await prisma.case.findUnique({
       where: { id: caseId },
       select: {
         presentingDepartmentId: true,
         createdById: true,
+        status: true,
       },
     });
 
     if (!caseRecord) return false;
 
-    // Can edit if they created it or it's in their department
-    return (
-      caseRecord.createdById === user.id ||
-      (!!user.departmentId && caseRecord.presentingDepartmentId === user.departmentId)
-    );
+    // 1. Author can edit DRAFT, SUBMITTED, PENDING, RESUBMITTED
+    if (caseRecord.createdById === user.id) {
+      return (
+        caseRecord.status === CaseStatus.DRAFT ||
+        caseRecord.status === CaseStatus.SUBMITTED ||
+        caseRecord.status === CaseStatus.PENDING ||
+        caseRecord.status === CaseStatus.RESUBMITTED
+      );
+    }
+
+    // 2. Radiology/Pathology consultants can edit SUBMITTED, PENDING, RESUBMITTED
+    let isRadOrPath = false;
+    if (user.departmentName) {
+      const deptName = user.departmentName.toLowerCase();
+      if (deptName.includes("radiology") || deptName.includes("pathology")) {
+        isRadOrPath = true;
+      }
+    } else if (user.departmentId) {
+      // Fallback to DB check if departmentName is missing from session
+      const userDept = await prisma.department.findUnique({
+        where: { id: user.departmentId },
+        select: { name: true },
+      });
+      const deptName = userDept?.name.toLowerCase() || "";
+      if (deptName.includes("radiology") || deptName.includes("pathology")) {
+        isRadOrPath = true;
+      }
+    }
+
+    if (isRadOrPath) {
+      return (
+        caseRecord.status === CaseStatus.SUBMITTED ||
+        caseRecord.status === CaseStatus.PENDING ||
+        caseRecord.status === CaseStatus.RESUBMITTED
+      );
+    }
+
+    // 3. Departmental consultants can edit if they are from the presenting department
+    // (Only for specific statuses or any? Sticking to user request)
+    if (!!user.departmentId && caseRecord.presentingDepartmentId === user.departmentId) {
+        return (
+          caseRecord.status === CaseStatus.SUBMITTED ||
+          caseRecord.status === CaseStatus.PENDING ||
+          caseRecord.status === CaseStatus.RESUBMITTED
+        );
+    }
   }
 
   return false;
@@ -209,16 +252,8 @@ export async function canEditRadiologyFindings(
     return false;
   }
 
-  // Consultant can edit if they are from Radiology department
-  if (isConsultant(user) && user.departmentId) {
-    const department = await prisma.department.findUnique({
-      where: { id: user.departmentId },
-      select: { name: true },
-    });
-
-    // Check if department name contains "Radiology" (case-insensitive)
-    return department?.name.toLowerCase().includes("radiology") ?? false;
-  }
+  // Consultant can edit if they are Rad/Path, or if the case is in their department or created by them
+  return canEditCase(user, caseId);
 
   return false;
 }
@@ -246,16 +281,8 @@ export async function canEditPathologyFindings(
     return false;
   }
 
-  // Consultant can edit if they are from Pathology department
-  if (isConsultant(user) && user.departmentId) {
-    const department = await prisma.department.findUnique({
-      where: { id: user.departmentId },
-      select: { name: true },
-    });
-
-    // Check if department name contains "Pathology" (case-insensitive)
-    return department?.name.toLowerCase().includes("pathology") ?? false;
-  }
+  // Consultant can edit if they are Rad/Path, or if the case is in their department or created by them
+  return canEditCase(user, caseId);
 
   return false;
 }

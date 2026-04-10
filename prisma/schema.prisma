@@ -27,6 +27,17 @@ enum Gender {
   Other
 }
 
+enum TwoFactorChannel {
+  TELEGRAM
+  WHATSAPP
+}
+
+enum WhatsappTemplateStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum CaseStatus {
   DRAFT
   SUBMITTED
@@ -85,8 +96,13 @@ model User {
   // Telegram notification
   telegramId String? // Telegram user ID for notifications
 
-  // Two-Factor Authentication (via Telegram)
-  twoFactorEnabled Boolean @default(false) // Only effective when telegramId is set
+  // WhatsApp notification
+  whatsappPhone       String?   // User's WhatsApp phone in E.164 format (e.g., +919876543210)
+  whatsappConsentDate DateTime? // strict timestamp of user's active digital opt-in consent
+
+  // Two-Factor Authentication
+  twoFactorEnabled          Boolean          @default(false) // Only effective when telegramId or whatsappPhone is set
+  preferredTwoFactorChannel TwoFactorChannel @default(TELEGRAM) // Preferred channel for 2FA codes
 
   department          Department?          @relation(fields: [departmentId], references: [id])
   createdCases        Case[]               @relation("CaseCreator")
@@ -97,6 +113,7 @@ model User {
   consensusReports     ConsensusReport[]     @relation("ConsensusCreator")
   auditLogs            AuditLog[]
   telegramVerification TelegramVerification?
+  whatsappVerification WhatsappVerification?
   twoFactorCodes       TwoFactorCode[]
   notifications        Notification[]
   backups              Backup[]
@@ -166,6 +183,8 @@ model Case {
   diagnosisStage String
   treatmentPlan  String
   question       String
+  // Department IDs from which expert opinions are requested
+  concernedDepartmentIds Json?
 
   status CaseStatus
 
@@ -186,6 +205,7 @@ model Case {
   followUp String?
 
   attachments         CaseAttachment[]
+  dicomFiles          DicomFile[]
   specialistsOpinions SpecialistsOpinion[]
   consensusReport     ConsensusReport?
   notifications       Notification[]
@@ -199,12 +219,27 @@ model CaseAttachment {
   caseId     String
   fileName   String
   fileType   String
-  fileSize   Int
+  fileSize   Int // Size in bytes
   storageKey String
+  isDicomBundle Boolean @default(false)
 
   case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model DicomFile {
+  id         String @id @default(uuid())
+  caseId     String
+  fileName   String // Original filename (e.g., "CT_Scan.zip")
+  fileSize   Int    // Size in bytes
+  storageKey String // MinIO storage key
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@map("dicom_files")
 }
 
 model SpecialistsOpinion {
@@ -256,10 +291,11 @@ model AuditLog {
 
 model HospitalSettings {
   id        String   @id @default("single") // Single record with fixed ID
-  name      String? // Hospital name (text)
-  logoUrl   String? // Hospital logo image URL (path to uploaded image)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  name               String? // Hospital name (text)
+  logoUrl            String? // Hospital logo image URL (path to uploaded image)
+  defaultCountryCode String  @default("+91") // Default country code for phone numbers
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@map("hospital_settings")
 }
@@ -292,6 +328,35 @@ model EmailSettings {
   @@map("email_settings")
 }
 
+model WhatsappSettings {
+  id                String   @id @default("single") // Single record with fixed ID
+  enabled           Boolean  @default(false)
+  phoneNumberId     String?  // Meta WhatsApp Phone Number ID
+  businessAccountId String?  // Meta WhatsApp Business Account ID
+  accessToken       String?  // Encrypted Meta access token
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("whatsapp_settings")
+}
+
+model WhatsappTemplate {
+  id               String                 @id @default(uuid())
+  name             String                 @unique // Template name in Meta (lowercase, underscores)
+  category         String                 // AUTHENTICATION, MARKETING, or UTILITY
+  language         String                 @default("en_US")
+  headerText       String?                // Optional header
+  bodyText         String                 // Body with {{1}}, {{2}} placeholders
+  footerText       String?                // Optional footer
+  status           WhatsappTemplateStatus @default(PENDING)
+  metaTemplateId   String?                // Template ID returned by Meta API
+  notificationType NotificationType?      // Maps to app notification type (null for generic)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  @@map("whatsapp_templates")
+}
+
 model Backup {
   id          String   @id @default(uuid())
   type        String   // "database" or "minio"
@@ -316,6 +381,24 @@ model TelegramVerification {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("telegram_verifications")
+}
+
+model WhatsappVerification {
+  id            String    @id @default(uuid())
+  userId        String    @unique
+  whatsappPhone String
+  code          String
+  token         String?   @unique
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+  consumedAt    DateTime?
+  createdAt     DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, whatsappPhone])
+  @@index([expiresAt])
+  @@map("whatsapp_verifications")
 }
 
 model Notification {

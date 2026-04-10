@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Upload, X, File, FileText, Image, Trash2, RotateCcw, Eye, Download } from "lucide-react";
+import { Upload, X, FileText, Image, Trash2, RotateCcw, Eye, Download, Folder } from "lucide-react";
 import { FileIcon, defaultStyles } from "react-file-icon";
 import { useSession } from "next-auth/react";
 import { isCoordinator } from "@/lib/permissions/client";
@@ -41,6 +41,7 @@ interface Attachment {
   fileType: string;
   fileSize: number;
   storageKey: string;
+  isDicomBundle?: boolean;
   createdAt: string;
 }
 
@@ -73,18 +74,50 @@ export function AttachmentManager({
   const [isDragging, setIsDragging] = useState(false);
   const [viewerModalOpen, setViewerModalOpen] = useState(false);
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
+  const [canEditPermission, setCanEditPermission] = useState(false);
+  const userId = session?.user?.id;
+  const userRole = session?.user?.role;
+  const userDepartmentId = session?.user?.departmentId ?? null;
 
-  const user = session?.user
+  const user = userId && userRole
     ? {
-        id: session.user.id,
-        role: session.user.role,
-        departmentId: session.user.departmentId,
-      }
+      id: userId,
+      role: userRole,
+      departmentId: userDepartmentId,
+    }
     : null;
 
   const isCreator = user?.id === caseCreatedById;
-  const canEditPermission = user && (isCreator || isCoordinator(user));
-  
+
+  useEffect(() => {
+    const checkEditPermission = async () => {
+      if (!user) {
+        setCanEditPermission(false);
+        return;
+      }
+
+      if (isCoordinator(user) || isCreator) {
+        setCanEditPermission(true);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/cases/${caseId}/permissions?type=edit`);
+        if (response.ok) {
+          const data = await response.json();
+          setCanEditPermission(!!data.canEdit);
+        } else {
+          setCanEditPermission(false);
+        }
+      } catch (error) {
+        console.error("Error checking attachment edit permissions:", error);
+        setCanEditPermission(false);
+      }
+    };
+
+    checkEditPermission();
+  }, [caseId, isCreator, userId, userRole, userDepartmentId]);
+
   // Check if editing is allowed based on status
   const canEditByStatus = 
     caseStatus === CaseStatus.DRAFT ||
@@ -92,7 +125,7 @@ export function AttachmentManager({
     caseStatus === CaseStatus.PENDING ||
     caseStatus === CaseStatus.RESUBMITTED;
   
-  const canEdit = canEditPermission && canEditByStatus;
+  const canEdit = !!canEditPermission && canEditByStatus;
   
   // Use external edit mode if provided, otherwise attachments are always editable when canEdit is true
   const isEditing = externalIsEditing !== undefined ? externalIsEditing : canEdit;
@@ -177,6 +210,8 @@ export function AttachmentManager({
       setStagedFiles((prev) => [...prev, ...validFiles]);
     }
   };
+
+
 
   const handleDelete = (attachmentId: string) => {
     // Mark for deletion instead of deleting immediately
@@ -268,7 +303,11 @@ export function AttachmentManager({
   };
 
   const handleDownload = (attachment: Attachment) => {
-    window.open(`/api/attachments/file/${attachment.id}`, "_blank");
+    if (attachment.isDicomBundle) {
+      window.open(`/api/dicom-download/${attachment.id}`, "_blank");
+    } else {
+      window.open(`/api/attachments/file/${attachment.id}`, "_blank");
+    }
   };
 
   const handleView = (attachment: Attachment) => {
@@ -286,6 +325,7 @@ export function AttachmentManager({
         </CardHeader>
         <CardContent className="pt-2 pb-3 space-y-4">
         {isEditing && (
+          <div className="flex flex-col gap-4">
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -310,7 +350,7 @@ export function AttachmentManager({
                 <Upload className="h-8 w-8" />
                 <div>
                   <span className="text-sm font-medium">
-                    Click to upload or drag and drop
+                    Click to upload or drag and drop files
                   </span>
                   <p className="text-xs text-muted-foreground mt-1">
                     Images, PDF, Word, Excel, PowerPoint (max 10MB)
@@ -318,6 +358,9 @@ export function AttachmentManager({
                 </div>
               </div>
             </label>
+          </div>
+
+
           </div>
         )}
 
@@ -386,12 +429,16 @@ export function AttachmentManager({
               >
                       <div className="flex flex-col items-center gap-2">
                         <div className="flex items-center justify-center w-16 h-16">
-                          {getFileIcon(attachment.fileName, attachment.fileType)}
+                          {attachment.isDicomBundle ? (
+                            <Folder className="h-12 w-12 text-blue-600" />
+                          ) : (
+                            getFileIcon(attachment.fileName, attachment.fileType)
+                          )}
                         </div>
                         <div className="w-full text-center">
                           <p className="text-xs font-medium truncate" title={attachment.fileName}>
-                      {attachment.fileName}
-                    </p>
+                            {attachment.isDicomBundle ? (attachment.fileName.replace("_manifest.json", "")) : attachment.fileName}
+                          </p>
                           <p className="text-xs text-muted-foreground mt-1">
                             {formatFileSize(attachment.fileSize)}
                     </p>
@@ -434,6 +481,26 @@ export function AttachmentManager({
                           <p>Download</p>
                         </TooltipContent>
                       </Tooltip>
+                      {attachment.isDicomBundle && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="default"
+                              size="icon"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`/ohif-viewer/viewer?url=/api/dicom-manifest/${attachment.id}`, "_blank");
+                              }}
+                              className="h-7 w-7 bg-blue-600 hover:bg-blue-700"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Open in OHIF Viewer</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
                       {isEditing && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -492,4 +559,3 @@ export function AttachmentManager({
     </>
   );
 }
-

@@ -43,7 +43,8 @@ export function Topbar({ userName = "User", userRole }: TopbarProps) {
   };
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background">
+    <header className="sticky top-0 z-50 border-b bg-white">
+
       {/* Mobile Layout */}
       <div className="md:hidden">
         {/* First line: Hospital branding in center */}
@@ -115,16 +116,12 @@ export function Topbar({ userName = "User", userRole }: TopbarProps) {
       </div>
 
       {/* Desktop Layout */}
-      <div className="hidden md:flex h-16 items-center gap-4 px-6 relative">
-        {/* ClarityMDT on the left */}
-        <div className="flex items-center">
-          <h2 className="text-lg font-semibold">ClarityMDT</h2>
-        </div>
-
+      <div className="hidden md:flex h-16 items-center flex-1 px-6 relative">
         {/* Hospital Logo/Name in the center - absolutely positioned to viewport center */}
         <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <HospitalBranding />
         </div>
+
 
         {/* User info and menu on the right */}
         <div className="flex items-center gap-3 ml-auto">

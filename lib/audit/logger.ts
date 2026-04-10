@@ -19,6 +19,12 @@ export enum AuditAction {
   DEPARTMENT_DELETE = "DEPARTMENT_DELETE",
   // Hospital Settings operations
   HOSPITAL_SETTINGS_UPDATE = "HOSPITAL_SETTINGS_UPDATE",
+  // Attachment operations
+  ATTACHMENT_UPLOAD = "ATTACHMENT_UPLOAD",
+  ATTACHMENT_DELETE = "ATTACHMENT_DELETE",
+  // DICOM operations
+  DICOM_UPLOAD = "DICOM_UPLOAD",
+  DICOM_DELETE = "DICOM_DELETE",
 }
 
 interface AuditLogData {

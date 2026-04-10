@@ -1,11 +1,14 @@
 /**
  * Two-Factor Authentication (2FA) Module
  * 
- * Provides 2FA via Telegram for users who have linked their accounts.
+ * Provides 2FA via Telegram or WhatsApp for users who have linked their accounts.
  */
 
 import { prisma } from "@/lib/prisma";
 import { sendTelegramMessage } from "@/lib/telegram/sendMessage";
+import { sendWhatsappTemplateMessage } from "@/lib/whatsapp/sendMessage";
+import { getWhatsappSettings } from "@/lib/whatsapp/getSettings";
+import { WhatsappTemplateStatus } from "@prisma/client";
 import { randomInt } from "crypto";
 
 const CODE_LENGTH = 6;
@@ -21,19 +24,64 @@ function generateCode(): string {
 }
 
 /**
- * Create and send a 2FA code to the user via Telegram
- * @param userId - The user's ID
- * @returns The created code (for testing) or throws error
+ * Send 2FA code via WhatsApp using an AUTHENTICATION template
  */
-export async function createAndSendTwoFactorCode(userId: string): Promise<{ success: boolean; expiresAt: Date }> {
-    // Get the user with their Telegram ID
+async function sendCodeViaWhatsapp(whatsappPhone: string, code: string): Promise<boolean> {
+    try {
+        const whatsappSettings = await getWhatsappSettings();
+        if (!whatsappSettings?.enabled) {
+            return false;
+        }
+
+        // Find an approved AUTHENTICATION template for 2FA
+        const template = await prisma.whatsappTemplate.findFirst({
+            where: {
+                category: "AUTHENTICATION",
+                status: WhatsappTemplateStatus.APPROVED,
+            },
+        });
+
+        if (!template) {
+            console.error("No approved AUTHENTICATION template for WhatsApp 2FA");
+            return false;
+        }
+
+        await sendWhatsappTemplateMessage(
+            whatsappPhone,
+            template.name,
+            template.language,
+            [
+                {
+                    type: "body",
+                    parameters: [
+                        { type: "text" as const, text: code },
+                    ],
+                },
+            ]
+        );
+        return true;
+    } catch (error) {
+        console.error("Failed to send 2FA code via WhatsApp:", error);
+        return false;
+    }
+}
+
+/**
+ * Create and send a 2FA code to the user via their preferred channel
+ * @param userId - The user's ID
+ * @returns The created code details or throws error
+ */
+export async function createAndSendTwoFactorCode(userId: string): Promise<{ success: boolean; expiresAt: Date; channel: string }> {
+    // Get the user with their notification settings
     const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
             id: true,
             name: true,
             telegramId: true,
+            whatsappPhone: true,
             twoFactorEnabled: true,
+            preferredTwoFactorChannel: true,
         },
     });
 
@@ -41,8 +89,8 @@ export async function createAndSendTwoFactorCode(userId: string): Promise<{ succ
         throw new Error("User not found");
     }
 
-    if (!user.telegramId) {
-        throw new Error("Telegram account not linked");
+    if (!user.telegramId && !user.whatsappPhone) {
+        throw new Error("No notification channel linked (Telegram or WhatsApp)");
     }
 
     if (!user.twoFactorEnabled) {
@@ -74,21 +122,64 @@ export async function createAndSendTwoFactorCode(userId: string): Promise<{ succ
         },
     });
 
-    // Send the code via Telegram
-    const message = `🔐 *ClarityMDT Login Verification*\n\nYour verification code is:\n\n*${code}*\n\nThis code expires in ${CODE_EXPIRY_MINUTES} minutes.\n\n⚠️ If you didn't request this code, please secure your account immediately.`;
+    // Determine which channel to use
+    let channelUsed = "telegram";
+    let sent = false;
 
-    try {
-        await sendTelegramMessage({
-            chatId: user.telegramId,
-            text: message,
-            parseMode: "Markdown",
-        });
-    } catch (error) {
-        console.error("Failed to send 2FA code via Telegram:", error);
+    if (user.preferredTwoFactorChannel === "WHATSAPP" && user.whatsappPhone) {
+        // Try WhatsApp first
+        sent = await sendCodeViaWhatsapp(user.whatsappPhone, code);
+        if (sent) {
+            channelUsed = "whatsapp";
+        } else if (user.telegramId) {
+            // Fallback to Telegram
+            const message = `🔐 *ClarityMDT Login Verification*\n\nYour verification code is:\n\n*${code}*\n\nThis code expires in ${CODE_EXPIRY_MINUTES} minutes.\n\n⚠️ If you didn't request this code, please secure your account immediately.`;
+            try {
+                await sendTelegramMessage({
+                    chatId: user.telegramId,
+                    text: message,
+                    parseMode: "Markdown",
+                });
+                sent = true;
+                channelUsed = "telegram";
+            } catch (error) {
+                console.error("Failed to send 2FA code via Telegram (fallback):", error);
+            }
+        }
+    } else if (user.telegramId) {
+        // Use Telegram (default)
+        const message = `🔐 *ClarityMDT Login Verification*\n\nYour verification code is:\n\n*${code}*\n\nThis code expires in ${CODE_EXPIRY_MINUTES} minutes.\n\n⚠️ If you didn't request this code, please secure your account immediately.`;
+        try {
+            await sendTelegramMessage({
+                chatId: user.telegramId,
+                text: message,
+                parseMode: "Markdown",
+            });
+            sent = true;
+            channelUsed = "telegram";
+        } catch (error) {
+            console.error("Failed to send 2FA code via Telegram:", error);
+            // Fallback to WhatsApp
+            if (user.whatsappPhone) {
+                sent = await sendCodeViaWhatsapp(user.whatsappPhone, code);
+                if (sent) {
+                    channelUsed = "whatsapp";
+                }
+            }
+        }
+    } else if (user.whatsappPhone) {
+        // Only WhatsApp available
+        sent = await sendCodeViaWhatsapp(user.whatsappPhone, code);
+        if (sent) {
+            channelUsed = "whatsapp";
+        }
+    }
+
+    if (!sent) {
         throw new Error("Failed to send verification code. Please try again.");
     }
 
-    return { success: true, expiresAt };
+    return { success: true, expiresAt, channel: channelUsed };
 }
 
 /**
@@ -128,22 +219,28 @@ export async function verifyTwoFactorCode(userId: string, code: string): Promise
 export async function getTwoFactorStatus(userId: string): Promise<{
     enabled: boolean;
     configured: boolean;
+    channel: string;
 }> {
     const user = await prisma.user.findUnique({
         where: { id: userId },
         select: {
             telegramId: true,
+            whatsappPhone: true,
             twoFactorEnabled: true,
+            preferredTwoFactorChannel: true,
         },
     });
 
     if (!user) {
-        return { enabled: false, configured: false };
+        return { enabled: false, configured: false, channel: "telegram" };
     }
 
+    const hasAnyChannel = !!user.telegramId || !!user.whatsappPhone;
+
     return {
-        enabled: user.twoFactorEnabled && !!user.telegramId,
-        configured: !!user.telegramId,
+        enabled: user.twoFactorEnabled && hasAnyChannel,
+        configured: hasAnyChannel,
+        channel: user.preferredTwoFactorChannel || "TELEGRAM",
     };
 }
 
@@ -156,16 +253,16 @@ export async function getTwoFactorStatus(userId: string): Promise<{
 export async function setTwoFactorEnabled(userId: string, enabled: boolean): Promise<{ twoFactorEnabled: boolean }> {
     const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { telegramId: true },
+        select: { telegramId: true, whatsappPhone: true },
     });
 
     if (!user) {
         throw new Error("User not found");
     }
 
-    // Can only enable 2FA if Telegram is linked
-    if (enabled && !user.telegramId) {
-        throw new Error("Cannot enable 2FA without a linked Telegram account");
+    // Can only enable 2FA if at least one channel is linked
+    if (enabled && !user.telegramId && !user.whatsappPhone) {
+        throw new Error("Cannot enable 2FA without a linked Telegram or WhatsApp account");
     }
 
     const updated = await prisma.user.update({
@@ -192,3 +289,4 @@ export async function cleanupExpiredCodes(): Promise<number> {
 
     return result.count;
 }
+

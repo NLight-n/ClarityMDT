@@ -5,7 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { Calendar, Users, Edit, Trash2, CheckCircle2, XCircle, UserCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
+
 
 interface MeetingCardProps {
   meeting: {
@@ -47,7 +49,8 @@ export function MeetingCard({
   const isCancelled = status === "CANCELLED";
 
   return (
-    <Card className={isPast || isCancelled ? "opacity-75" : ""}>
+    <Card className={cn("bg-white shadow-sm", (isPast || isCancelled) ? "opacity-75" : "")}>
+
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="space-y-1">

@@ -9,6 +9,7 @@
 export * from "./client";
 export * from "./upload";
 export * from "./delete";
+export * from "./download";
 export * from "./generatePresignedUrl";
 
 

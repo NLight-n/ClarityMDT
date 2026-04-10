@@ -22,6 +22,26 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const KNOWN_COUNTRY_CODES = [
+  { value: "+91", label: "🇮🇳 +91" },
+  { value: "+1", label: "🇺🇸/🇨🇦 +1" },
+  { value: "+44", label: "🇬🇧 +44" },
+  { value: "+61", label: "🇦🇺 +61" },
+  { value: "+971", label: "🇦🇪 +971" },
+  { value: "+65", label: "🇸🇬 +65" },
+  { value: "+92", label: "🇵🇰 +92" },
+  { value: "+880", label: "🇧🇩 +880" },
+];
+const KNOWN_CODES = KNOWN_COUNTRY_CODES.map(c => c.value);
 
 export function UserProfile() {
   const { data: session, update } = useSession();
@@ -51,8 +71,23 @@ export function UserProfile() {
   const [manualBotUsername, setManualBotUsername] = useState<string>("");
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null);
   const [telegramEnabled, setTelegramEnabled] = useState<boolean | null>(null);
+  // WhatsApp state
+  const [whatsappPhone, setWhatsappPhone] = useState<string>("");
+  const [whatsappOptInChecked, setWhatsappOptInChecked] = useState<boolean>(false);
+  const [savingWhatsapp, setSavingWhatsapp] = useState(false);
+  const [whatsappEnabled, setWhatsappEnabled] = useState<boolean | null>(null);
+  const [whatsappOtpDialogOpen, setWhatsappOtpDialogOpen] = useState(false);
+  const [whatsappOtp, setWhatsappOtp] = useState("");
+  const [sendingWhatsappOtp, setSendingWhatsappOtp] = useState(false);
+  const [verifyingWhatsappOtp, setVerifyingWhatsappOtp] = useState(false);
+  const [pendingWhatsappPhone, setPendingWhatsappPhone] = useState<string | null>(null);
+  const [whatsappVerificationToken, setWhatsappVerificationToken] = useState<string | null>(null);
+  // Phone country Code state
+  const [phoneCountryCode, setPhoneCountryCode] = useState("+91");
+  const [originalPhoneNumber, setOriginalPhoneNumber] = useState<string | null>(null);
   // Two-Factor Authentication state
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
+  const [preferredTwoFactorChannel, setPreferredTwoFactorChannel] = useState<string>("TELEGRAM");
   const [toggling2FA, setToggling2FA] = useState(false);
   const [messageDialog, setMessageDialog] = useState<{
     open: boolean;
@@ -83,9 +118,39 @@ export function UserProfile() {
       if (session?.user?.id) {
         setLoading(true);
         try {
+          // Fetch hospital settings for default country code first
+          let defaultCode = "+91";
+          try {
+            const hospitalResponse = await fetch("/api/hospital-settings");
+            if (hospitalResponse.ok) {
+              const hospitalData = await hospitalResponse.json();
+              if (hospitalData.defaultCountryCode) {
+                defaultCode = hospitalData.defaultCountryCode;
+              }
+            }
+          } catch (e) {
+            console.error(e);
+          }
+
           const response = await fetch(`/api/profile`);
           if (response.ok) {
             const userData = await response.json();
+            
+            setOriginalPhoneNumber(userData.phoneNumber || null);
+
+            // Split existing normal phone if present
+            if (userData.phoneNumber) {
+              const match = userData.phoneNumber.match(/^(\+\d{1,4})(.*)$/);
+              if (match) {
+                setPhoneCountryCode(match[1]);
+                userData.phoneNumber = match[2];
+              } else {
+                setPhoneCountryCode(defaultCode);
+              }
+            } else {
+              setPhoneCountryCode(defaultCode);
+            }
+
             setFormData({
               name: userData.name || "",
               loginId: userData.loginId || "",
@@ -101,6 +166,11 @@ export function UserProfile() {
             setSignatureAuthenticated(userData.signatureAuthenticated || false);
             setTelegramId(userData.telegramId || null);
             setTwoFactorEnabled(userData.twoFactorEnabled || false);
+            setPreferredTwoFactorChannel(userData.preferredTwoFactorChannel || "TELEGRAM");
+            setWhatsappPhone(userData.whatsappPhone || "");
+            setWhatsappOptInChecked(!!userData.whatsappPhone);
+            setWhatsappVerificationToken(null);
+            setPendingWhatsappPhone(null);
 
             // Set streaming URL for signature image if it exists
             if (userData.signatureUrl) {
@@ -116,6 +186,19 @@ export function UserProfile() {
             setTelegramEnabled(telegramData.botUsername !== null);
           } else {
             setTelegramEnabled(false);
+          }
+
+          // Check if WhatsApp is enabled
+          try {
+            const waResponse = await fetch("/api/admin/whatsapp-settings");
+            if (waResponse.ok) {
+              const waData = await waResponse.json();
+              setWhatsappEnabled(waData.enabled || false);
+            } else {
+              setWhatsappEnabled(false);
+            }
+          } catch {
+            setWhatsappEnabled(false);
           }
         } catch (error) {
           console.error("Error fetching user data:", error);
@@ -455,6 +538,102 @@ export function UserProfile() {
     }
   };
 
+  const sendWhatsappOtp = async (phone: string, openDialog = true) => {
+    setSendingWhatsappOtp(true);
+    try {
+      const response = await fetch("/api/profile/whatsapp/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ whatsappPhone: phone }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to send WhatsApp OTP");
+      }
+
+      if (openDialog) {
+        setWhatsappOtpDialogOpen(true);
+      }
+      setMessageDialog({
+        open: true,
+        type: "success",
+        title: "OTP Sent",
+        message: "A verification OTP has been sent to your WhatsApp number.",
+      });
+      return true;
+    } catch (error: any) {
+      console.error("Error sending WhatsApp OTP:", error);
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "OTP Send Failed",
+        message: error.message || "Failed to send WhatsApp OTP.",
+      });
+      return false;
+    } finally {
+      setSendingWhatsappOtp(false);
+    }
+  };
+
+  const handleVerifyWhatsappOtp = async () => {
+    if (!pendingWhatsappPhone) {
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "Missing Phone",
+        message: "No pending WhatsApp phone found for verification.",
+      });
+      return;
+    }
+    if (!/^\d{6}$/.test(whatsappOtp.trim())) {
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "Invalid OTP",
+        message: "Please enter the 6-digit OTP sent to WhatsApp.",
+      });
+      return;
+    }
+
+    setVerifyingWhatsappOtp(true);
+    try {
+      const response = await fetch("/api/profile/whatsapp/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          whatsappPhone: pendingWhatsappPhone,
+          otp: whatsappOtp.trim(),
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to verify OTP");
+      }
+
+      setWhatsappVerificationToken(data.verificationToken);
+      setWhatsappOtp("");
+      setWhatsappOtpDialogOpen(false);
+      setMessageDialog({
+        open: true,
+        type: "success",
+        title: "WhatsApp Verified",
+        message: "OTP verified. Click Save to complete WhatsApp opt-in.",
+      });
+    } catch (error: any) {
+      console.error("Error verifying WhatsApp OTP:", error);
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "Verification Failed",
+        message: error.message || "Invalid or expired OTP.",
+      });
+    } finally {
+      setVerifyingWhatsappOtp(false);
+    }
+  };
+
   const handleSave = async (providedOldPassword?: string) => {
     setErrors({});
 
@@ -497,6 +676,8 @@ export function UserProfile() {
         password?: string;
         oldPassword?: string;
         phoneNumber?: string | null;
+        whatsappPhone?: string | null;
+        whatsappOtpToken?: string;
         email?: string | null;
         medicalCouncilNumber?: string | null;
         degrees?: string | null;
@@ -515,7 +696,44 @@ export function UserProfile() {
         }
       }
       // Optional fields - always include them (can be empty strings which will be converted to null)
-      updateData.phoneNumber = formData.phoneNumber.trim() || null;
+      const fullNewPhone = formData.phoneNumber.trim() ? `${phoneCountryCode}${formData.phoneNumber.trim()}` : null;
+      updateData.phoneNumber = fullNewPhone;
+
+      if (whatsappOptInChecked) {
+        if (!fullNewPhone || !/^\+[1-9]\d{6,14}$/.test(fullNewPhone)) {
+          setMessageDialog({
+            open: true,
+            type: "error",
+            title: "Invalid Phone Number",
+            message: "Enter a valid primary phone number before enabling WhatsApp opt-in.",
+          });
+          setSaving(false);
+          return;
+        }
+
+        const needsVerification =
+          !whatsappPhone ||
+          whatsappPhone !== fullNewPhone;
+
+        if (needsVerification) {
+          if (!whatsappVerificationToken || pendingWhatsappPhone !== fullNewPhone) {
+            setMessageDialog({
+              open: true,
+              type: "error",
+              title: "WhatsApp Verification Required",
+              message: "Please verify your WhatsApp number with OTP before saving.",
+            });
+            setSaving(false);
+            return;
+          }
+          updateData.whatsappOtpToken = whatsappVerificationToken;
+        }
+
+        updateData.whatsappPhone = fullNewPhone;
+      } else {
+        updateData.whatsappPhone = null;
+      }
+
       updateData.email = formData.email.trim() || null;
       updateData.medicalCouncilNumber = formData.medicalCouncilNumber.trim() || null;
       updateData.degrees = formData.degrees.trim() || null;
@@ -550,6 +768,18 @@ export function UserProfile() {
         if (oldPasswordDialogOpen) {
           setOldPasswordDialogOpen(false);
         }
+        
+        if (whatsappOptInChecked && fullNewPhone) {
+          setWhatsappPhone(fullNewPhone);
+          setPendingWhatsappPhone(null);
+          setWhatsappVerificationToken(null);
+        } else {
+          setWhatsappPhone("");
+          setPendingWhatsappPhone(null);
+          setWhatsappVerificationToken(null);
+        }
+        setOriginalPhoneNumber(fullNewPhone);
+
         setMessageDialog({
           open: true,
           type: "success",
@@ -1138,8 +1368,126 @@ export function UserProfile() {
                     )}
                   </div>
 
-                  {/* Two-Factor Authentication Section - Only show when Telegram is linked */}
-                  {telegramId && (
+                  {/* WhatsApp Notifications Section */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">WhatsApp Notifications</Label>
+                    {whatsappEnabled === false ? (
+                      <div className="p-3 border rounded-lg bg-muted/50">
+                        <div className="flex items-start gap-2">
+                          <AlertCircle className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">
+                              WhatsApp Notifications Disabled
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              WhatsApp notifications are not configured. Contact an administrator to enable WhatsApp.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
+                          <div className="space-y-0.5">
+                            <Label className="text-base">Opt-in to WhatsApp</Label>
+                            <p className="text-xs text-muted-foreground pr-4">
+                              Receive notifications on your primary phone number if WhatsApp is supported.
+                            </p>
+                            {whatsappPhone && (
+                              <p className="text-xs text-green-600 mt-1 flex items-center font-medium">
+                                <CheckCircle2 className="h-3 w-3 mr-1" /> Linked: {whatsappPhone}
+                              </p>
+                            )}
+                            {whatsappOptInChecked && pendingWhatsappPhone && pendingWhatsappPhone !== whatsappPhone && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                OTP verification pending for {pendingWhatsappPhone}
+                              </p>
+                            )}
+                          </div>
+                          {savingWhatsapp ? (
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-1" />
+                          ) : (
+                            <Switch
+                              checked={whatsappOptInChecked}
+                              onCheckedChange={async (checked) => {
+                                const fullPhone = formData.phoneNumber.trim() ? `${phoneCountryCode}${formData.phoneNumber.trim()}` : null;
+
+                                if (checked && (!fullPhone || !/^\+[1-9]\d{6,14}$/.test(fullPhone))) {
+                                  setMessageDialog({
+                                    open: true,
+                                    type: "error",
+                                    title: "Invalid Phone Number",
+                                    message: "Please enter a valid primary phone number in the Basic Information section first.",
+                                  });
+                                  return;
+                                }
+
+                                if (checked) {
+                                  const verifiedFullPhone = fullPhone as string;
+                                  setWhatsappOptInChecked(true);
+                                  setPendingWhatsappPhone(verifiedFullPhone);
+                                  setWhatsappVerificationToken(null);
+                                  setWhatsappOtp("");
+                                  const sent = await sendWhatsappOtp(verifiedFullPhone, true);
+                                  if (!sent) {
+                                    setWhatsappOptInChecked(!!whatsappPhone);
+                                    setPendingWhatsappPhone(null);
+                                  }
+                                  return;
+                                }
+
+                                setSavingWhatsapp(true);
+                                try {
+                                  const response = await fetch("/api/profile", {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ whatsappPhone: null }),
+                                  });
+
+                                  if (response.ok) {
+                                    setWhatsappOptInChecked(false);
+                                    setWhatsappPhone("");
+                                    setPendingWhatsappPhone(null);
+                                    setWhatsappVerificationToken(null);
+                                    setMessageDialog({
+                                      open: true,
+                                      type: "success",
+                                      title: "WhatsApp Disabled",
+                                      message: "WhatsApp notifications have been disabled.",
+                                    });
+                                  } else {
+                                    const err = await response.json();
+                                    setMessageDialog({
+                                      open: true,
+                                      type: "error",
+                                      title: "Error",
+                                      message: err.error || "Failed to update WhatsApp preferences",
+                                    });
+                                    setWhatsappOptInChecked(true);
+                                  }
+                                } catch (error) {
+                                  console.error("Error updating WhatsApp:", error);
+                                  setMessageDialog({
+                                    open: true,
+                                    type: "error",
+                                    title: "Error",
+                                    message: "An error occurred. Please try again.",
+                                  });
+                                  setWhatsappOptInChecked(true);
+                                } finally {
+                                  setSavingWhatsapp(false);
+                                }
+                              }}
+                              disabled={saving}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Two-Factor Authentication Section - Show when Telegram or WhatsApp is linked */}
+                  {(telegramId || whatsappPhone) && (
                     <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -1169,7 +1517,7 @@ export function UserProfile() {
                                   type: "success",
                                   title: checked ? "2FA Enabled" : "2FA Disabled",
                                   message: checked
-                                    ? "Two-factor authentication is now enabled. You will receive a verification code on Telegram when logging in."
+                                    ? "Two-factor authentication is now enabled. You will receive a verification code when logging in."
                                     : "Two-factor authentication has been disabled.",
                                 });
                               } else {
@@ -1197,9 +1545,43 @@ export function UserProfile() {
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {twoFactorEnabled
-                          ? "You will receive a verification code on Telegram each time you log in."
-                          : "Enable to require a verification code from Telegram when logging in."}
+                          ? `You will receive a verification code via ${preferredTwoFactorChannel === "WHATSAPP" ? "WhatsApp" : "Telegram"} each time you log in.`
+                          : "Enable to require a verification code when logging in."}
                       </p>
+                      {/* Preferred channel selector - only when both channels are linked and 2FA is enabled */}
+                      {twoFactorEnabled && telegramId && whatsappPhone && (
+                        <div className="flex items-center gap-3 mt-2">
+                          <Label className="text-xs whitespace-nowrap">Preferred channel:</Label>
+                          <select
+                            value={preferredTwoFactorChannel}
+                            onChange={async (e) => {
+                              const newChannel = e.target.value;
+                              try {
+                                const response = await fetch("/api/profile", {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ preferredTwoFactorChannel: newChannel }),
+                                });
+                                if (response.ok) {
+                                  setPreferredTwoFactorChannel(newChannel);
+                                  setMessageDialog({
+                                    open: true,
+                                    type: "success",
+                                    title: "Updated",
+                                    message: `2FA codes will now be sent via ${newChannel === "WHATSAPP" ? "WhatsApp" : "Telegram"}.`,
+                                  });
+                                }
+                              } catch (error) {
+                                console.error("Error updating 2FA channel:", error);
+                              }
+                            }}
+                            className="text-xs border rounded px-2 py-1 bg-background"
+                          >
+                            <option value="TELEGRAM">Telegram</option>
+                            <option value="WHATSAPP">WhatsApp</option>
+                          </select>
+                        </div>
+                      )}
                       {toggling2FA && (
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -1211,16 +1593,46 @@ export function UserProfile() {
 
                   <div className="space-y-2">
                     <Label htmlFor="phoneNumber">Phone Number</Label>
-                    <Input
-                      id="phoneNumber"
-                      type="tel"
-                      value={formData.phoneNumber}
-                      onChange={(e) =>
-                        setFormData({ ...formData, phoneNumber: e.target.value })
-                      }
-                      disabled={saving}
-                      placeholder="Enter phone number"
-                    />
+                    <div className="flex gap-2">
+                      <select
+                        className="flex h-9 w-[110px] items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        value={KNOWN_CODES.includes(phoneCountryCode) ? phoneCountryCode : "custom"}
+                        onChange={(e) => {
+                          if (e.target.value === "custom") {
+                            setPhoneCountryCode("+");
+                          } else {
+                            setPhoneCountryCode(e.target.value);
+                          }
+                        }}
+                        disabled={saving}
+                      >
+                        {KNOWN_COUNTRY_CODES.map((code) => (
+                          <option key={code.value} value={code.value}>{code.label}</option>
+                        ))}
+                        <option value="custom">Custom...</option>
+                      </select>
+                      {(!KNOWN_CODES.includes(phoneCountryCode) || phoneCountryCode === "custom") && (
+                        <Input
+                          type="text"
+                          placeholder="+123"
+                          value={phoneCountryCode}
+                          onChange={(e) => setPhoneCountryCode(e.target.value)}
+                          disabled={saving}
+                          className="w-[80px] font-mono text-sm"
+                        />
+                      )}
+                      <Input
+                        id="phoneNumber"
+                        type="tel"
+                        value={formData.phoneNumber}
+                        onChange={(e) =>
+                          setFormData({ ...formData, phoneNumber: e.target.value })
+                        }
+                        disabled={saving}
+                        placeholder="Enter phone number"
+                        className="flex-1"
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -1356,6 +1768,11 @@ export function UserProfile() {
                           });
                           setDepartmentName(userData.department?.name || null);
                           setTelegramId(userData.telegramId || null);
+                          setWhatsappPhone(userData.whatsappPhone || "");
+                          setWhatsappOptInChecked(!!userData.whatsappPhone);
+                          setPendingWhatsappPhone(null);
+                          setWhatsappVerificationToken(null);
+                          setWhatsappOtp("");
                           setErrors({});
                         }
                       } catch (error) {
@@ -1482,6 +1899,61 @@ export function UserProfile() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <Dialog open={whatsappOtpDialogOpen} onOpenChange={setWhatsappOtpDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verify WhatsApp Opt-in</DialogTitle>
+            <DialogDescription>
+              Enter the 6-digit OTP sent to {pendingWhatsappPhone || "your WhatsApp number"}.
+              Verification is required before saving WhatsApp opt-in.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="whatsappOtp">OTP</Label>
+            <Input
+              id="whatsappOtp"
+              value={whatsappOtp}
+              onChange={(e) => setWhatsappOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="Enter 6-digit OTP"
+              maxLength={6}
+              disabled={verifyingWhatsappOtp || sendingWhatsappOtp}
+            />
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                if (!pendingWhatsappPhone) return;
+                await sendWhatsappOtp(pendingWhatsappPhone, false);
+              }}
+              disabled={sendingWhatsappOtp || verifyingWhatsappOtp || !pendingWhatsappPhone}
+            >
+              {sendingWhatsappOtp ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resending...
+                </>
+              ) : (
+                "Resend OTP"
+              )}
+            </Button>
+            <Button
+              onClick={handleVerifyWhatsappOtp}
+              disabled={verifyingWhatsappOtp || sendingWhatsappOtp || whatsappOtp.trim().length !== 6}
+            >
+              {verifyingWhatsappOtp ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Verify OTP"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <MessageDialog
         open={messageDialog.open}
         onOpenChange={(open) => setMessageDialog((prev) => ({ ...prev, open }))}
@@ -1492,4 +1964,3 @@ export function UserProfile() {
     </>
   );
 }
-

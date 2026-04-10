@@ -13,6 +13,9 @@ const updateProfileSchema = z.object({
   email: z.string().optional().nullable(),
   medicalCouncilNumber: z.string().optional().nullable(),
   degrees: z.string().optional().nullable(),
+  whatsappPhone: z.string().optional().nullable(),
+  whatsappOtpToken: z.string().optional(),
+  preferredTwoFactorChannel: z.enum(["TELEGRAM", "WHATSAPP"]).optional(),
 });
 
 // GET /api/profile - Get current user's profile
@@ -50,7 +53,9 @@ export async function GET(request: NextRequest) {
       signatureUrl: userData.signatureUrl,
       signatureAuthenticated: userData.signatureAuthenticated,
       telegramId: userData.telegramId,
+      whatsappPhone: userData.whatsappPhone,
       twoFactorEnabled: userData.twoFactorEnabled,
+      preferredTwoFactorChannel: userData.preferredTwoFactorChannel,
       phoneNumber: userData.phoneNumber,
       email: userData.email,
       medicalCouncilNumber: userData.medicalCouncilNumber,
@@ -156,6 +161,62 @@ export async function PATCH(request: NextRequest) {
     }
     if (validatedData.degrees !== undefined) {
       updateData.degrees = validatedData.degrees?.trim() || null;
+    }
+
+    // WhatsApp phone (E.164 format)
+    if (validatedData.whatsappPhone !== undefined) {
+      const waPhone = validatedData.whatsappPhone?.trim() || null;
+      if (waPhone && !/^\+[1-9]\d{6,14}$/.test(waPhone)) {
+        return NextResponse.json(
+          { error: "Invalid WhatsApp phone number. Use E.164 format (e.g., +919876543210)" },
+          { status: 400 }
+        );
+      }
+
+      if (waPhone) {
+        const isChangingWhatsappPhone = waPhone !== existingUser.whatsappPhone;
+        const needsVerification = isChangingWhatsappPhone || !existingUser.whatsappConsentDate;
+
+        if (needsVerification) {
+          if (!validatedData.whatsappOtpToken) {
+            return NextResponse.json(
+              { error: "WhatsApp OTP verification is required before enabling opt-in." },
+              { status: 400 }
+            );
+          }
+
+          const verification = await (prisma as any).whatsappVerification.findFirst({
+            where: {
+              userId: user.id,
+              whatsappPhone: waPhone,
+              token: validatedData.whatsappOtpToken,
+              verifiedAt: { not: null },
+              consumedAt: null,
+              expiresAt: { gt: new Date() },
+            },
+          });
+
+          if (!verification) {
+            return NextResponse.json(
+              { error: "Invalid or expired WhatsApp OTP verification. Please verify again." },
+              { status: 400 }
+            );
+          }
+
+          await (prisma as any).whatsappVerification.update({
+            where: { id: verification.id },
+            data: { consumedAt: new Date() },
+          });
+        }
+      }
+
+      updateData.whatsappPhone = waPhone;
+      updateData.whatsappConsentDate = waPhone ? new Date() : null;
+    }
+
+    // Preferred 2FA channel
+    if (validatedData.preferredTwoFactorChannel !== undefined) {
+      updateData.preferredTwoFactorChannel = validatedData.preferredTwoFactorChannel;
     }
 
     const updatedUser = await prisma.user.update({

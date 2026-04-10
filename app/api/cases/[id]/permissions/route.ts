@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import {
+  canEditCase,
   canEditRadiologyFindings,
   canEditPathologyFindings,
 } from "@/lib/permissions/accessControl";
 
 /**
- * GET /api/cases/[id]/permissions - Check if user can edit radiology/pathology findings
+ * GET /api/cases/[id]/permissions - Check permissions for case editing modules
  * Query params:
- *   - type: "radiology" | "pathology"
+ *   - type: "edit" | "radiology" | "pathology"
  */
 export async function GET(
   request: NextRequest,
@@ -25,16 +26,18 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
 
-    if (!type || (type !== "radiology" && type !== "pathology")) {
+    if (!type || (type !== "edit" && type !== "radiology" && type !== "pathology")) {
       return NextResponse.json(
-        { error: "Invalid type parameter. Must be 'radiology' or 'pathology'" },
+        { error: "Invalid type parameter. Must be 'edit', 'radiology', or 'pathology'" },
         { status: 400 }
       );
     }
 
     let canEdit = false;
 
-    if (type === "radiology") {
+    if (type === "edit") {
+      canEdit = await canEditCase(user, id);
+    } else if (type === "radiology") {
       canEdit = await canEditRadiologyFindings(user, id);
     } else if (type === "pathology") {
       canEdit = await canEditPathologyFindings(user, id);

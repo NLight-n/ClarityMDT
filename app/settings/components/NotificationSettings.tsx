@@ -134,9 +134,12 @@ export function NotificationSettings() {
     try {
       const response = await fetch("/api/notifications?limit=100&unreadOnly=false");
       if (response.ok) {
-        const data = await response.json();
-        setNotifications(data.notifications || []);
-        setUnreadCount(data.unreadCount || 0);
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const data = await response.json();
+          setNotifications(data.notifications || []);
+          setUnreadCount(data.unreadCount || 0);
+        }
       }
     } catch (error) {
       console.error("Error fetching notifications:", error);

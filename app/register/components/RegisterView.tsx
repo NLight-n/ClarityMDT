@@ -21,6 +21,9 @@ interface Case {
   radiologyFindings: any;
   pathologyFindings: any;
   followUp: string | null;
+  attachments: Array<{
+    isDicomBundle: boolean;
+  }>;
   _count: {
     attachments: number;
     specialistsOpinions: number;
@@ -284,4 +287,3 @@ export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewP
     </div>
   );
 }
-

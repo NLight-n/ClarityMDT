@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canEditPathologyFindings } from "@/lib/permissions/accessControl";
+import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
 import { z } from "zod";
 
 const updatePathologyFindingsSchema = z.object({
   pathologyFindings: z.any(), // JSON field
 });
+
+const normalizeJson = (value: unknown) => {
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
 
 /**
  * PATCH /api/cases/[id]/pathology-findings - Update pathology findings
@@ -28,6 +38,12 @@ export async function PATCH(
     // Check if case exists
     const existingCase = await prisma.case.findUnique({
       where: { id },
+      select: {
+        id: true,
+        patientName: true,
+        mrn: true,
+        pathologyFindings: true,
+      },
     });
 
     if (!existingCase) {
@@ -45,6 +61,9 @@ export async function PATCH(
 
     const body = await request.json();
     const validatedData = updatePathologyFindingsSchema.parse(body);
+    const previousValue = normalizeJson(existingCase.pathologyFindings);
+    const nextValue = normalizeJson(validatedData.pathologyFindings);
+    const hasChanged = JSON.stringify(previousValue) !== JSON.stringify(nextValue);
 
     // Update pathology findings
     const updatedCase = await prisma.case.update({
@@ -74,6 +93,25 @@ export async function PATCH(
         },
       },
     });
+
+    if (hasChanged) {
+      await createAuditLog({
+        action: AuditAction.CASE_UPDATE,
+        userId: user.id,
+        caseId: id,
+        details: {
+          patientName: existingCase.patientName,
+          mrn: existingCase.mrn,
+          changes: {
+            pathologyFindings: {
+              old: previousValue,
+              new: nextValue,
+            },
+          },
+        },
+        ipAddress: getIpAddress(request.headers),
+      });
+    }
 
     return NextResponse.json(updatedCase);
   } catch (error) {

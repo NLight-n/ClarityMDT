@@ -23,9 +23,14 @@ interface RegisterCaseCardProps {
     radiologyFindings: any;
     pathologyFindings: any;
     followUp: string | null;
+    links?: any;
+    attachments?: Array<{
+      isDicomBundle: boolean;
+    }>;
     _count: {
       attachments: number;
       specialistsOpinions: number;
+      dicomFiles?: number;
     };
   };
   className?: string;
@@ -128,8 +133,22 @@ export function RegisterCaseCard({ caseData, className, meetingId }: RegisterCas
     }
   })();
 
-  const hasAttachments = caseData._count.attachments > 0;
+  const hasRegularAttachments = (caseData.attachments || []).some((attachment) => !attachment.isDicomBundle);
   const hasSpecialistsOpinions = caseData._count.specialistsOpinions > 0;
+  
+  // Check if has DICOM (either DICOM files table, DICOM bundles in attachments, or DICOM links)
+  const hasDicomBundles = (caseData.attachments || []).some((attachment) => attachment.isDicomBundle);
+  const hasDicomFiles = (caseData._count.dicomFiles || 0) > 0;
+  const hasDicomLinks = (() => {
+    try {
+      if (!caseData.links) return false;
+      const linksArray = typeof caseData.links === 'string' ? JSON.parse(caseData.links) : caseData.links;
+      return Array.isArray(linksArray) && linksArray.length > 0;
+    } catch {
+      return false;
+    }
+  })();
+  const hasDicom = hasDicomBundles || hasDicomFiles || hasDicomLinks;
   
   // Follow-up tag should only show for REVIEWED, RESUBMITTED, ARCHIVED status
   const shouldShowFollowUp = 
@@ -187,10 +206,10 @@ export function RegisterCaseCard({ caseData, className, meetingId }: RegisterCas
                 Pathology
               </Badge>
               <Badge 
-                variant={hasAttachments ? "default" : "outline"}
+                variant={hasRegularAttachments ? "default" : "outline"}
                 className={cn(
                   "text-[10px] px-1.5 py-0 h-4",
-                  hasAttachments ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground border-muted-foreground/30"
+                  hasRegularAttachments ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground border-muted-foreground/30"
                 )}
               >
                 Attachment
@@ -203,6 +222,15 @@ export function RegisterCaseCard({ caseData, className, meetingId }: RegisterCas
                 )}
               >
                 Specialists
+              </Badge>
+              <Badge 
+                variant={hasDicom ? "default" : "outline"}
+                className={cn(
+                  "text-[10px] px-1.5 py-0 h-4",
+                  hasDicom ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground border-muted-foreground/30"
+                )}
+              >
+                DICOM
               </Badge>
               {shouldShowFollowUp && (
                 <Badge 
@@ -229,4 +257,3 @@ export function RegisterCaseCard({ caseData, className, meetingId }: RegisterCas
     </Link>
   );
 }
-
