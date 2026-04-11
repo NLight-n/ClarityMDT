@@ -271,10 +271,24 @@ def generate_plane_slices(volume, plane, reference_ds, output_prefix,
             slice_progress = progress_base + int((i + 1) / num_slices * progress_range)
             progress_callback(slice_progress)
 
+    # Get dimensions from the first generated slice
+    if plane == "sagittal":
+        first_slice = volume_array[::-1, :, 0]
+    else:
+        first_slice = volume_array[::-1, 0, :]
+
     return {
         "seriesUID": series_uid,
         "storagePrefix": plane_prefix,
         "sliceCount": num_slices,
+        "rows": int(first_slice.shape[0]),
+        "columns": int(first_slice.shape[1]),
+        "modality": getattr(reference_ds, 'Modality', 'CT'),
+        "bitsAllocated": 16,
+        "pixelSpacing": [str(v) for v in pixel_spacing_out],
+        "sliceThickness": float(slice_thickness),
+        "sopClassUID": "1.2.840.10008.5.1.4.1.1.2",  # CT Image Storage
+        "imageOrientation": [str(v) for v in orientation],
     }
 
 

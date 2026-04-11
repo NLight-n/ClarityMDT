@@ -77,16 +77,45 @@ export async function GET(
             SeriesInstanceUID: info.seriesUID,
             SeriesDescription: `MPR ${plane.charAt(0).toUpperCase() + plane.slice(1)} - ${job.seriesDescription || ""}`.trim(),
             SeriesNumber: 9000 + (plane === "sagittal" ? 1 : 2),
-            Modality: study.series[0]?.Modality || "CT",
+            Modality: info.modality || study.series[0]?.Modality || "CT",
             instances: [],
           };
 
+          // Build instance metadata that OHIF's dicomjson data source requires
+          const sopClassUID = info.sopClassUID || "1.2.840.10008.5.1.4.1.1.2"; // CT Image Storage
+
           for (let i = 0; i < info.sliceCount; i++) {
+            const sopInstanceUID = `${info.seriesUID}.${i + 1}`;
             derivedSeries.instances.push({
               url: `${info.storagePrefix}/${String(i).padStart(6, "0")}.dcm`,
               metadata: {
-                SOPInstanceUID: `${info.seriesUID}.${i + 1}`,
+                // Required identification
+                SOPClassUID: sopClassUID,
+                SOPInstanceUID: sopInstanceUID,
                 InstanceNumber: i + 1,
+                // Series-level (OHIF reads from instances too)
+                SeriesInstanceUID: info.seriesUID,
+                SeriesDescription: derivedSeries.SeriesDescription,
+                SeriesNumber: derivedSeries.SeriesNumber,
+                Modality: derivedSeries.Modality,
+                // Image dimensions
+                Rows: info.rows || 512,
+                Columns: info.columns || 512,
+                BitsAllocated: info.bitsAllocated || 16,
+                BitsStored: 16,
+                HighBit: 15,
+                PixelRepresentation: 1,
+                SamplesPerPixel: 1,
+                PhotometricInterpretation: "MONOCHROME2",
+                NumberOfFrames: 1,
+                // Spatial information
+                ImageOrientationPatient: info.imageOrientation || (plane === "sagittal" ? ["0","1","0","0","0","-1"] : ["1","0","0","0","0","-1"]),
+                PixelSpacing: info.pixelSpacing || ["1", "1"],
+                SliceThickness: info.sliceThickness || 1,
+                // Image type
+                ImageType: ["DERIVED", "SECONDARY", "MPR"],
+                // Study reference (inherit from parent study)
+                StudyInstanceUID: study.StudyInstanceUID,
               },
             });
           }

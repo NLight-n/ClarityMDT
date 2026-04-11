@@ -288,6 +288,26 @@
       border-radius: 8px;
       margin-top: 12px;
     }
+
+    .mpr-btn-delete {
+      padding: 4px 8px;
+      background: none;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 6px;
+      color: #f87171;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-left: 6px;
+    }
+    .mpr-btn-delete:hover {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.5);
+    }
+    .mpr-btn-delete:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
   `;
 
   // Inject styles
@@ -406,6 +426,7 @@
         const s = series.mprStatus;
         if (s.status === 'COMPLETED') {
           html += `<span class="mpr-status-badge mpr-status-ready">✅ Ready</span>`;
+          html += `<button class="mpr-btn-delete" data-job-id="${s.jobId}" data-uid="${series.seriesInstanceUID}" title="Delete MPR">🗑️</button>`;
         } else if (s.status === 'PROCESSING' || s.status === 'QUEUED') {
           html += `<span class="mpr-status-badge mpr-status-processing">
             <span class="mpr-spinner"></span>
@@ -415,6 +436,7 @@
           startPolling(s.jobId, series.seriesInstanceUID);
         } else if (s.status === 'FAILED') {
           html += `<span class="mpr-status-badge mpr-status-failed" title="${s.errorMessage || ''}">❌ Failed</span>`;
+          html += `<button class="mpr-btn-delete" data-job-id="${s.jobId}" data-uid="${series.seriesInstanceUID}" title="Delete MPR">🗑️</button>`;
           html += ` <button class="mpr-btn-generate" data-uid="${series.seriesInstanceUID}" data-desc="${series.seriesDescription}">Retry</button>`;
         }
       } else {
@@ -432,6 +454,15 @@
       button.addEventListener('click', (e) => {
         const uid = e.target.getAttribute('data-uid');
         triggerMpr(uid);
+      });
+    });
+
+    // Attach delete handlers
+    body.querySelectorAll('.mpr-btn-delete').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        const jobId = e.currentTarget.getAttribute('data-job-id');
+        const uid = e.currentTarget.getAttribute('data-uid');
+        deleteMpr(jobId, uid);
       });
     });
   }
@@ -478,6 +509,41 @@
       }
     } catch (err) {
       alert('Failed to trigger MPR: ' + err.message);
+    }
+  }
+
+  async function deleteMpr(jobId, seriesInstanceUID) {
+    if (!confirm('Delete this MPR? The derived Sagittal/Coronal series will be removed. You can re-generate them later.')) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/mpr/delete/${jobId}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to delete MPR');
+        return;
+      }
+
+      // Clear local state
+      if (seriesData) {
+        const series = seriesData.series.find(s => s.seriesInstanceUID === seriesInstanceUID);
+        if (series) {
+          series.mprStatus = null;
+        }
+      }
+
+      renderSeriesList();
+
+      // Reload viewer to remove derived series from the panel
+      setTimeout(() => {
+        window.location.reload();
+      }, RELOAD_DELAY_MS);
+    } catch (err) {
+      alert('Failed to delete MPR: ' + err.message);
     }
   }
 
