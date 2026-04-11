@@ -277,6 +277,16 @@ def generate_plane_slices(volume, plane, reference_ds, output_prefix,
     else:
         first_slice = volume_array[::-1, 0, :]
 
+    # Window level from reference
+    window_center = None
+    window_width = None
+    if hasattr(reference_ds, 'WindowCenter'):
+        wc = reference_ds.WindowCenter
+        window_center = float(wc[0]) if isinstance(wc, (list, pydicom.multival.MultiValue)) else float(wc)
+    if hasattr(reference_ds, 'WindowWidth'):
+        ww = reference_ds.WindowWidth
+        window_width = float(ww[0]) if isinstance(ww, (list, pydicom.multival.MultiValue)) else float(ww)
+
     return {
         "seriesUID": series_uid,
         "storagePrefix": plane_prefix,
@@ -289,6 +299,16 @@ def generate_plane_slices(volume, plane, reference_ds, output_prefix,
         "sliceThickness": float(slice_thickness),
         "sopClassUID": "1.2.840.10008.5.1.4.1.1.2",  # CT Image Storage
         "imageOrientation": [str(v) for v in orientation],
+        # Origin & spacing for per-instance ImagePositionPatient computation
+        "origin": [float(v) for v in origin],
+        "spacingBetweenSlices": float(slice_thickness),
+        "planeAxis": 0 if plane == "sagittal" else 1,  # Which axis to step along
+        # Window level
+        "windowCenter": window_center,
+        "windowWidth": window_width,
+        # Rescale (identity since pixel data is already in HU)
+        "rescaleIntercept": 0,
+        "rescaleSlope": 1,
     }
 
 

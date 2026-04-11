@@ -83,9 +83,17 @@ export async function GET(
 
           // Build instance metadata that OHIF's dicomjson data source requires
           const sopClassUID = info.sopClassUID || "1.2.840.10008.5.1.4.1.1.2"; // CT Image Storage
+          const origin = info.origin || [0, 0, 0];
+          const planeAxis = info.planeAxis ?? (plane === "sagittal" ? 0 : 1);
+          const spacingStep = info.spacingBetweenSlices || info.sliceThickness || 1;
 
           for (let i = 0; i < info.sliceCount; i++) {
             const sopInstanceUID = `${info.seriesUID}.${i + 1}`;
+
+            // Compute ImagePositionPatient for this slice
+            const position = [...origin];
+            position[planeAxis] = origin[planeAxis] + i * spacingStep;
+
             derivedSeries.instances.push({
               url: `${info.storagePrefix}/${String(i).padStart(6, "0")}.dcm`,
               metadata: {
@@ -108,10 +116,19 @@ export async function GET(
                 SamplesPerPixel: 1,
                 PhotometricInterpretation: "MONOCHROME2",
                 NumberOfFrames: 1,
-                // Spatial information
+                // Spatial information — per instance
+                ImagePositionPatient: position.map(String),
                 ImageOrientationPatient: info.imageOrientation || (plane === "sagittal" ? ["0","1","0","0","0","-1"] : ["1","0","0","0","0","-1"]),
                 PixelSpacing: info.pixelSpacing || ["1", "1"],
                 SliceThickness: info.sliceThickness || 1,
+                SpacingBetweenSlices: spacingStep,
+                // Rescale — identity (pixel data is already in HU)
+                RescaleIntercept: info.rescaleIntercept ?? 0,
+                RescaleSlope: info.rescaleSlope ?? 1,
+                RescaleType: "HU",
+                // Window level from source series
+                ...(info.windowCenter != null && { WindowCenter: info.windowCenter }),
+                ...(info.windowWidth != null && { WindowWidth: info.windowWidth }),
                 // Image type
                 ImageType: ["DERIVED", "SECONDARY", "MPR"],
                 // Study reference (inherit from parent study)

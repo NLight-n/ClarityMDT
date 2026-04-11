@@ -156,13 +156,12 @@ def create_derived_dicom(
     if hasattr(reference_ds, 'WindowWidth'):
         ds.WindowWidth = reference_ds.WindowWidth
 
-    # Copy rescale intercept/slope
-    if hasattr(reference_ds, 'RescaleIntercept'):
-        ds.RescaleIntercept = reference_ds.RescaleIntercept
-    if hasattr(reference_ds, 'RescaleSlope'):
-        ds.RescaleSlope = reference_ds.RescaleSlope
-    if hasattr(reference_ds, 'RescaleType'):
-        ds.RescaleType = reference_ds.RescaleType
+    # Rescale: pixel data is ALREADY in Hounsfield Units (rescale was applied
+    # during volume building in build_volume()). Set identity rescale so OHIF
+    # doesn't apply the transform a second time.
+    ds.RescaleIntercept = '0'
+    ds.RescaleSlope = '1'
+    ds.RescaleType = 'HU'
 
     # Set pixel data
     ds.PixelData = pixel_data.astype(np.int16).tobytes()
