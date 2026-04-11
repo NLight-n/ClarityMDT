@@ -79,6 +79,10 @@ services:
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
       - MINIO_BUCKET=${MINIO_BUCKET}
       - MINIO_SSL=${MINIO_SSL}
+      # Server-side MPR processing
+      - MPR_WORKER_URL=http://mpr-worker:5100
+      - MPR_ENABLED=${MPR_ENABLED:-true}
+      - MPR_RESULT_EXPIRY_DAYS=${MPR_RESULT_EXPIRY_DAYS:-7}
     ports:
       - "${PORT}:3000"  # Map host port to container port 3000
     # Note: Don't mount volumes to /app/.next - it would override the built code
@@ -96,6 +100,36 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  mpr-worker:
+    build:
+      context: ./mpr-worker
+      dockerfile: Dockerfile
+    container_name: mpr-worker
+    environment:
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${MINIO_BUCKET}
+      - MINIO_SSL=false
+      - MPR_DOWNSAMPLE_THRESHOLD=${MPR_DOWNSAMPLE_THRESHOLD:-512}
+    networks:
+      - clarityapp_network
+    restart: unless-stopped
+    depends_on:
+      minio:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
 volumes:
   postgres_data:

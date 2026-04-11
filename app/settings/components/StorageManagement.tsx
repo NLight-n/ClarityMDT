@@ -25,6 +25,7 @@ import {
   Search,
   ArchiveRestore,
   RefreshCw,
+  Zap,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { isCoordinator } from "@/lib/permissions/client";
@@ -86,7 +87,9 @@ export function StorageManagement() {
   const [loading, setLoading] = useState(true);
   const [storageItems, setStorageItems] = useState<DicomStorageItem[]>([]);
   const [isCleaningOrphans, setIsCleaningOrphans] = useState(false);
+  const [isCleaningMpr, setIsCleaningMpr] = useState(false);
   const [isOrphanDialogOpen, setIsOrphanDialogOpen] = useState(false);
+  const [isMprCleanupDialogOpen, setIsMprCleanupDialogOpen] = useState(false);
   const [isPruneDialogOpen, setIsPruneDialogOpen] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState<{
     open: boolean;
@@ -169,6 +172,44 @@ export function StorageManagement() {
       });
     } finally {
       setIsCleaningOrphans(false);
+    }
+  };
+
+  const handleCleanExpiredMpr = async () => {
+    setIsCleaningMpr(true);
+    setIsMprCleanupDialogOpen(false);
+    try {
+      const response = await fetch("/api/mpr/cleanup", {
+        method: "POST",
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessageDialog({
+          open: true,
+          type: "success",
+          title: "MPR Cleanup Complete",
+          message: `Deleted ${data.expiredJobsDeleted} expired MPR job(s) and ${data.failedJobsDeleted} failed job(s).${data.errors > 0 ? ` ${data.errors} error(s) encountered.` : ""}`,
+        });
+      } else {
+        const errorData = await response.json();
+        setMessageDialog({
+          open: true,
+          type: "error",
+          title: "MPR Cleanup Failed",
+          message: errorData.error || "Failed to clean expired MPR files",
+        });
+      }
+    } catch (error) {
+      console.error("Error cleaning expired MPR files:", error);
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "Error",
+        message: "An error occurred during MPR cleanup",
+      });
+    } finally {
+      setIsCleaningMpr(false);
     }
   };
 
@@ -286,6 +327,24 @@ export function StorageManagement() {
                   <>
                     <Search className="mr-2 h-4 w-4" />
                     Clean Orphaned Files
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsMprCleanupDialogOpen(true)}
+                disabled={isCleaningMpr}
+              >
+                {isCleaningMpr ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Cleaning...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="mr-2 h-4 w-4" />
+                    Clean Expired MPR Files
                   </>
                 )}
               </Button>
@@ -431,6 +490,42 @@ export function StorageManagement() {
               className="bg-destructive text-destructive-foreground"
             >
               Delete DICOM
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* MPR Cleanup Confirmation Dialog */}
+      <AlertDialog
+        open={isMprCleanupDialogOpen}
+        onOpenChange={(open) => setIsMprCleanupDialogOpen(open)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clean Expired MPR Files</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete all expired server-side MPR reconstructions and
+              their derived DICOM files from storage.
+              <br />
+              <br />
+              Expired MPR jobs are those older than the configured retention
+              period (default: 7 days). Failed MPR jobs older than 24 hours
+              will also be removed.
+              <br />
+              <br />
+              Original DICOM data is <strong>never</strong> affected. Users
+              can re-generate MPR if needed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isCleaningMpr}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCleanExpiredMpr}
+              disabled={isCleaningMpr}
+            >
+              Clean Expired MPR
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -45,6 +45,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/setup") ||
     pathname.startsWith("/api/hospital-settings") ||
     pathname.startsWith("/api/dicom-proxy") ||
+    pathname.startsWith("/api/mpr/callback") ||
     pathname.startsWith("/api/images") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
@@ -144,7 +145,7 @@ export const config = {
      * 
      * This includes root path "/" and all dashboard routes
      */
-    "/((?!api/auth|api/setup|api/hospital-settings|api/dicom-proxy|api/images|_next/static|_next/image|favicon.ico|login|setup|ohif-viewer).*)",
+    "/((?!api/auth|api/setup|api/hospital-settings|api/dicom-proxy|api/mpr/callback|api/images|_next/static|_next/image|favicon.ico|login|setup|ohif-viewer).*)",
     "/", // Explicitly include root path
   ],
 };

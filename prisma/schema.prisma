@@ -65,6 +65,13 @@ enum NotificationType {
   MEETING_REQUEST
 }
 
+enum MprJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 // ------------------------------------------------------
 // MODELS
 // ------------------------------------------------------
@@ -206,6 +213,7 @@ model Case {
 
   attachments         CaseAttachment[]
   dicomFiles          DicomFile[]
+  mprJobs             MprJob[]
   specialistsOpinions SpecialistsOpinion[]
   consensusReport     ConsensusReport?
   notifications       Notification[]
@@ -437,4 +445,37 @@ model TwoFactorCode {
   @@index([userId, code])
   @@index([expiresAt])
   @@map("two_factor_codes")
+}
+
+model MprJob {
+  id                String       @id @default(uuid())
+  caseId            String
+  attachmentId      String       // Source CaseAttachment (DICOM bundle manifest)
+  seriesInstanceUID String       // Which specific series to process
+  seriesDescription String?      // Human-readable name (e.g., "CT Arterial Phase")
+  status            MprJobStatus @default(QUEUED)
+
+  // Processing details
+  planes            Json         // Planes generated: ["sagittal", "coronal"]
+  progress          Int          @default(0) // 0-100 percentage
+  errorMessage      String?
+
+  // Result: storage keys for derived series
+  derivedSeriesKeys Json?        // { sagittal: { seriesUID, storagePrefix, sliceCount }, coronal: {...} }
+
+  // Performance tracking
+  instanceCount     Int?         // Number of source instances
+  processingTime    Int?         // Processing time in seconds
+
+  case              Case         @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  completedAt       DateTime?
+  expiresAt         DateTime?    // For auto-cleanup of derived data
+
+  @@unique([attachmentId, seriesInstanceUID]) // One MPR job per series per bundle
+  @@index([caseId])
+  @@index([status])
+  @@map("mpr_jobs")
 }
