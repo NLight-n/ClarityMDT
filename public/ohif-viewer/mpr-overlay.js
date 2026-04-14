@@ -686,6 +686,11 @@
     window.addEventListener('click', (e) => {
       if (interceptorCooldown) return;
 
+      // Make sure we never intercept clicks on our own custom UI elements!
+      if (e.target.closest('#mpr-overlay-btn, #mpr-warning-backdrop, #mpr-modal-backdrop')) {
+        return;
+      }
+
       let isMprClick = false;
       let btn = e.target.closest('[data-cy="mpr" i]') || 
                 e.target.closest('div[data-tool="MPR"]') ||
