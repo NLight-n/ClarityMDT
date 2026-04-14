@@ -308,6 +308,76 @@
       opacity: 0.4;
       cursor: not-allowed;
     }
+
+    /* --- Interceptor Warning Modal --- */
+    #mpr-warning-modal {
+      background: #1e1e2e;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      width: 400px;
+      padding: 24px;
+      text-align: left;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      color: #e4e4e7;
+    }
+
+    #mpr-warning-modal h3 {
+      margin: 0 0 12px 0;
+      color: #fbbf24;
+      font-size: 18px;
+    }
+
+    #mpr-warning-modal p {
+      font-size: 13px;
+      line-height: 1.5;
+      color: #a1a1aa;
+      margin-bottom: 20px;
+    }
+    
+    #mpr-warning-modal p strong {
+      color: #e4e4e7;
+    }
+
+    .mpr-warning-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .mpr-btn-server {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mpr-btn-server:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    .mpr-btn-local {
+      background: rgba(255,255,255,0.05);
+      color: #f4f4f5;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 12px;
+      border-radius: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mpr-btn-local:hover { background: rgba(255,255,255,0.1); }
+
+    .mpr-btn-cancel {
+      background: transparent;
+      color: #71717a;
+      border: none;
+      padding: 8px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .mpr-btn-cancel:hover { color: #f4f4f5; }
   `;
 
   // Inject styles
@@ -608,5 +678,136 @@
       window.location.reload();
     }, RELOAD_DELAY_MS);
   }
+
+  let interceptorCooldown = false;
+
+  // --- OHIF Built-in MPR Interceptor ---
+  function setupMprInterceptor() {
+    window.addEventListener('click', (e) => {
+      if (interceptorCooldown) return;
+
+      let isMprClick = false;
+      let btn = e.target.closest('[data-cy="mpr" i]') || 
+                e.target.closest('div[data-tool="MPR"]') ||
+                e.target.closest('div[data-value="mpr" i]');
+      
+      if (!btn) {
+        const potentialBtn = e.target.closest('button, [role="button"], .toolbar-button, .group, .flex');
+        if (potentialBtn) {
+          const text = (potentialBtn.innerText || '').trim().toUpperCase();
+          const title = (potentialBtn.getAttribute('title') || '').trim().toUpperCase();
+          const tooltip = (potentialBtn.getAttribute('data-tooltip') || '').trim().toUpperCase();
+          
+          if (text === 'MPR' || text === '2D MPR' || title.includes('MPR') || tooltip.includes('MPR')) {
+            isMprClick = true;
+            btn = potentialBtn;
+          }
+        }
+      } else {
+        isMprClick = true;
+      }
+
+      if (isMprClick) {
+        e.preventDefault();
+        e.stopPropagation();
+        showMprWarning(btn, e.target);
+      }
+    }, true); 
+  }
+
+  function showMprWarning(originalBtn, exactTarget) {
+    if (document.getElementById('mpr-warning-backdrop')) return;
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'mpr-warning-backdrop';
+    backdrop.style.cssText = `
+      position: fixed; inset: 0; z-index: 100000;
+      background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.2s ease;
+    `;
+
+    backdrop.innerHTML = `
+      <div id="mpr-warning-modal">
+        <h3>⚠️ High Memory Warning</h3>
+        <p>You are about to launch the built-in Client-Side MPR.<br/><br/>
+        This will attempt to load the <strong>entire</strong> volume series into your browser's memory. <br/><br/>If your PC has less than 8GB of RAM, this may <strong>freeze your entire system.</strong></p>
+        
+        <div class="mpr-warning-actions">
+          <button class="mpr-btn-server" id="mpr-warn-server">🚀 Use Server-Side MPR (Recommended)</button>
+          <button class="mpr-btn-local" id="mpr-warn-local">Proceed anyway (My PC has high RAM)</button>
+          <button class="mpr-btn-cancel" id="mpr-warn-cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+    requestAnimationFrame(() => backdrop.style.opacity = '1');
+
+    const closeHandler = () => {
+      backdrop.style.opacity = '0';
+      setTimeout(() => backdrop.remove(), 200);
+    };
+
+    document.getElementById('mpr-warn-cancel').addEventListener('click', closeHandler);
+    
+    document.getElementById('mpr-warn-server').addEventListener('click', () => {
+      closeHandler();
+      openModal(); 
+    });
+
+    // Proceed Locally
+    document.getElementById('mpr-warn-local').addEventListener('click', () => {
+      closeHandler();
+      
+      let triggeredViaReact = false;
+      
+      // Method 1: Bypass the browser's "isTrusted" check by invoking the React event handler directly!
+      try {
+        let currentEl = exactTarget;
+        while (currentEl && currentEl !== document.body) {
+          const reactKey = Object.keys(currentEl).find(k => k.startsWith('__reactProps$') || k.startsWith('__reactEventHandlers$') || k.startsWith('__reactFiber$'));
+          if (reactKey) {
+            const props = currentEl[reactKey].memoizedProps || currentEl[reactKey];
+            if (props && typeof props.onClick === 'function') {
+              // Fire React's internal handler with a mocked event wrapper
+              props.onClick({ preventDefault: () => {}, stopPropagation: () => {}, nativeEvent: {}, target: exactTarget, currentTarget: currentEl });
+              triggeredViaReact = true;
+              break;
+            }
+          }
+          currentEl = currentEl.parentElement;
+        }
+      } catch (e) {
+        console.warn('React direct execution blocked:', e);
+      }
+
+      // Method 2: If React Fiber injection didn't work (due to minification or stricter React 18 event matching),
+      // we gracefully disable the interceptor for 6 seconds and instruct the user to click real fast.
+      if (!triggeredViaReact) {
+        interceptorCooldown = true;
+        
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+          position: fixed; top: 100px; left: 50%; transform: translateX(-50%);
+          background: #f59e0b; color: #fff; padding: 12px 24px; border-radius: 8px;
+          z-index: 999999; font-family: Inter, sans-serif; font-weight: 600; font-size: 14px;
+          box-shadow: 0 8px 30px rgba(0,0,0,0.4); transition: opacity 0.3s;
+          pointer-events: none; text-align: center; line-height: 1.4; border: 1px solid rgba(255,255,255,0.2);
+        `;
+        toast.innerHTML = '⚙️ Safety override active.<br/>Please click the MPR button again to launch.';
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+          toast.style.opacity = '0';
+          setTimeout(() => toast.remove(), 300);
+          interceptorCooldown = false;
+        }, 10000);
+      }
+    });
+  }
+
+  // Initialize the interceptor
+  setupMprInterceptor();
 
 })();
