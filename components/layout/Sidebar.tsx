@@ -9,7 +9,6 @@ import {
   Calendar,
   Settings,
   ClipboardList,
-  Handshake,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -59,9 +58,11 @@ export function Sidebar({ userRole, className }: SidebarProps) {
   const sidebarLogo = (
     <div className="px-6 py-8 border-b border-neutral-900">
       <Link href="/dashboard" className="flex items-center gap-2">
-        <div className="h-8 w-8 rounded-lg bg-white flex items-center justify-center">
-          <Handshake className="h-5 w-5 text-black" />
-        </div>
+        <img
+          src="/icon.svg"
+          alt="ClarityMDT Logo"
+          className="h-8 w-8 rounded-lg"
+        />
         <span className="text-xl font-bold tracking-tight text-white">ClarityMDT</span>
       </Link>
     </div>

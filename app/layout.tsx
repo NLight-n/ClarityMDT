@@ -6,6 +6,10 @@ import { AppLayout } from "@/components/layout/AppLayout";
 export const metadata: Metadata = {
   title: "ClarityMDT",
   description: "ClarityMDT - Multi-Disciplinary Team Register Digital System",
+  icons: {
+    icon: "/icon.svg?v=2",
+    apple: "/icon.svg?v=2",
+  },
 };
 
 export default function RootLayout({

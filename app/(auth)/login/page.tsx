@@ -332,10 +332,10 @@ function LoginForm() {
       <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardHeader className="space-y-1">
-            <div className="flex items-center justify-center mb-2">
-              <Shield className="h-8 w-8 text-primary" />
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <img src="/icon.svg" alt="ClarityMDT Logo" className="h-8 w-8 rounded-lg shadow-sm" />
+              <CardTitle className="text-2xl font-bold">Two-Factor Authentication</CardTitle>
             </div>
-            <CardTitle className="text-2xl font-bold text-center">Two-Factor Authentication</CardTitle>
             <CardDescription className="text-center">
               Enter the 6-digit code sent to your Telegram
             </CardDescription>
@@ -452,7 +452,10 @@ function LoginForm() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">ClarityMDT</CardTitle>
+          <div className="flex items-center justify-center gap-3 mb-2">
+            <img src="/icon.svg" alt="ClarityMDT Logo" className="h-8 w-8 rounded-lg shadow-sm" />
+            <CardTitle className="text-2xl font-bold">ClarityMDT</CardTitle>
+          </div>
           <CardDescription className="text-center">
             Sign in to your account
           </CardDescription>
