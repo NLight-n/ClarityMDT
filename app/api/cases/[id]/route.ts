@@ -415,12 +415,45 @@ export async function PATCH(
     }
 
     // JSON fields
-    const jsonFields = ["clinicalDetails", "radiologyFindings", "pathologyFindings", "links", "concernedDepartmentIds"];
+    const jsonFields = ["clinicalDetails", "radiologyFindings", "pathologyFindings", "links"];
     for (const field of jsonFields) {
       if ((validatedData as any)[field] !== undefined) {
         if (trackChange(field, (existingCase as any)[field], (validatedData as any)[field])) {
             updateData[field] = (validatedData as any)[field];
         }
+      }
+    }
+
+    // Handle concernedDepartmentIds separately — resolve IDs to department names for audit logging
+    if (validatedData.concernedDepartmentIds !== undefined) {
+      const oldIds: string[] = Array.isArray((existingCase as any).concernedDepartmentIds)
+        ? (existingCase as any).concernedDepartmentIds
+        : [];
+      const newIds: string[] = validatedData.concernedDepartmentIds;
+      const oldStr = JSON.stringify(oldIds);
+      const newStr = JSON.stringify(newIds);
+
+      if (oldStr !== newStr) {
+        updateData.concernedDepartmentIds = newIds;
+
+        // Collect all unique IDs to resolve names
+        const allDeptIds = Array.from(new Set([...oldIds, ...newIds]));
+        const departments = allDeptIds.length > 0
+          ? await prisma.department.findMany({
+              where: { id: { in: allDeptIds } },
+              select: { id: true, name: true },
+            })
+          : [];
+        const deptNameMap = new Map(departments.map((d) => [d.id, d.name]));
+
+        const resolveNames = (ids: string[]) =>
+          ids.map((id) => deptNameMap.get(id) || id);
+
+        // Store with a friendlier key so the UI shows "Concerned Departments"
+        auditDetails.changes["concernedDepartments"] = {
+          old: resolveNames(oldIds),
+          new: resolveNames(newIds),
+        };
       }
     }
 

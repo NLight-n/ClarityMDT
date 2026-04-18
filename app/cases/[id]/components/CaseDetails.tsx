@@ -145,6 +145,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const [unassigningMeeting, setUnassigningMeeting] = useState(false);
   const [reassigningMeeting, setReassigningMeeting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isLateSubmitWarningOpen, setIsLateSubmitWarningOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [pdfDialogOpen, setPdfDialogOpen] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -602,6 +603,25 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       return;
     }
 
+    // Check if the selected meeting is less than 24 hours away
+    const selectedMeeting = upcomingMeetings.find((m) => m.id === selectedMeetingId);
+    if (selectedMeeting) {
+      const meetingTime = new Date(selectedMeeting.date).getTime();
+      const now = Date.now();
+      const hoursUntilMeeting = (meetingTime - now) / (1000 * 60 * 60);
+      if (hoursUntilMeeting < 24) {
+        // Close submit dialog and show the caution warning
+        setIsSubmitDialogOpen(false);
+        setIsLateSubmitWarningOpen(true);
+        return;
+      }
+    }
+
+    await confirmSubmit();
+  };
+
+  const confirmSubmit = async () => {
+    setIsLateSubmitWarningOpen(false);
     setSubmitting(true);
     setIsSubmitDialogOpen(false);
     
@@ -1150,13 +1170,38 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           </DialogContent>
         </Dialog>
         
+        {/* Late Submission Warning Dialog */}
+        <AlertDialog open={isLateSubmitWarningOpen} onOpenChange={setIsLateSubmitWarningOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Late Submission</AlertDialogTitle>
+              <AlertDialogDescription>
+                This case is being submitted very close to the meeting. Consultants may not have sufficient time to review the case before the discussion. If this is an urgent or emergency case, you may proceed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  setIsLateSubmitWarningOpen(false);
+                  setIsSubmitDialogOpen(true);
+                }}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={confirmSubmit}>
+                Submit Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         {/* Resubmit Dialog */}
         <Dialog open={isResubmitDialogOpen} onOpenChange={setIsResubmitDialogOpen}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Resubmit Case</DialogTitle>
               <DialogDescription>
-                Select a meeting date for this case, or resubmit without assignment.
+                Select a meeting date for this case.
               </DialogDescription>
             </DialogHeader>
             
@@ -1166,40 +1211,40 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
               </div>
             ) : (
               <div className="py-4">
-                <RadioGroup
-                  value={selectedResubmitMeetingId}
-                  onValueChange={setSelectedResubmitMeetingId}
-                >
-                  <div className="flex items-center space-x-2 py-2">
-                    <RadioGroupItem value="none" id="resubmit-none" />
-                    <Label htmlFor="resubmit-none" className="cursor-pointer">
-                      Resubmit without meeting assignment
-                    </Label>
+                {upcomingMeetings.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 space-y-2">
+                    <p>No upcoming meetings found.</p>
+                    <p>
+                      To request a meeting, go to{" "}
+                      <Link href="/settings?tab=notifications" className="text-primary underline hover:no-underline">
+                        Settings → Notifications → Request meeting
+                      </Link>
+                      .
+                    </p>
                   </div>
-                  
-                  {upcomingMeetings.map((meeting) => (
-                    <div key={meeting.id} className="flex items-center space-x-2 py-2">
-                      <RadioGroupItem value={meeting.id} id={`resubmit-${meeting.id}`} />
-                      <Label htmlFor={`resubmit-${meeting.id}`} className="cursor-pointer flex-1">
-                        <div>
-                          <div className="font-medium">
-                            {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
-                          </div>
-                          {meeting.description && (
-                            <div className="text-sm text-muted-foreground">
-                              {meeting.description}
+                ) : (
+                  <RadioGroup
+                    value={selectedResubmitMeetingId}
+                    onValueChange={setSelectedResubmitMeetingId}
+                  >
+                    {upcomingMeetings.map((meeting) => (
+                      <div key={meeting.id} className="flex items-center space-x-2 py-2">
+                        <RadioGroupItem value={meeting.id} id={`resubmit-${meeting.id}`} />
+                        <Label htmlFor={`resubmit-${meeting.id}`} className="cursor-pointer flex-1">
+                          <div>
+                            <div className="font-medium">
+                              {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
                             </div>
-                          )}
-                        </div>
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-                
-                {upcomingMeetings.length === 0 && (
-                  <p className="text-sm text-muted-foreground py-4">
-                    No upcoming meetings found. You can resubmit the case without assignment.
-                  </p>
+                            {meeting.description && (
+                              <div className="text-sm text-muted-foreground">
+                                {meeting.description}
+                              </div>
+                            )}
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
                 )}
               </div>
             )}
@@ -1212,7 +1257,10 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
               >
                 Cancel
               </Button>
-              <Button onClick={handleResubmit} disabled={submitting || loadingMeetings}>
+              <Button 
+                onClick={handleResubmit} 
+                disabled={submitting || loadingMeetings || !selectedResubmitMeetingId || selectedResubmitMeetingId === "none" || upcomingMeetings.length === 0}
+              >
                 {submitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1903,13 +1951,38 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
         </DialogContent>
       </Dialog>
 
+      {/* Late Submission Warning Dialog */}
+      <AlertDialog open={isLateSubmitWarningOpen} onOpenChange={setIsLateSubmitWarningOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Late Submission</AlertDialogTitle>
+            <AlertDialogDescription>
+              This case is being submitted very close to the meeting. Consultants may not have sufficient time to review the case before the discussion. If this is an urgent or emergency case, you may proceed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setIsLateSubmitWarningOpen(false);
+                setIsSubmitDialogOpen(true);
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSubmit}>
+              Submit Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Resubmit Dialog */}
       <Dialog open={isResubmitDialogOpen} onOpenChange={setIsResubmitDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Resubmit Case</DialogTitle>
             <DialogDescription>
-              Select a meeting date for this case, or resubmit without assignment.
+              Select a meeting date for this case.
             </DialogDescription>
           </DialogHeader>
           
@@ -1919,40 +1992,40 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
             </div>
           ) : (
             <div className="py-4">
-              <RadioGroup
-                value={selectedResubmitMeetingId}
-                onValueChange={setSelectedResubmitMeetingId}
-              >
-                <div className="flex items-center space-x-2 py-2">
-                  <RadioGroupItem value="none" id="resubmit-none" />
-                  <Label htmlFor="resubmit-none" className="cursor-pointer">
-                    Resubmit without meeting assignment
-                  </Label>
+              {upcomingMeetings.length === 0 ? (
+                <div className="text-sm text-muted-foreground py-4 space-y-2">
+                  <p>No upcoming meetings found.</p>
+                  <p>
+                    To request a meeting, go to{" "}
+                    <Link href="/settings?tab=notifications" className="text-primary underline hover:no-underline">
+                      Settings → Notifications → Request meeting
+                    </Link>
+                    .
+                  </p>
                 </div>
-                
-                {upcomingMeetings.map((meeting) => (
-                  <div key={meeting.id} className="flex items-center space-x-2 py-2">
-                    <RadioGroupItem value={meeting.id} id={`resubmit-${meeting.id}`} />
-                    <Label htmlFor={`resubmit-${meeting.id}`} className="cursor-pointer flex-1">
-                      <div>
-                        <div className="font-medium">
-                          {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
-                        </div>
-                        {meeting.description && (
-                          <div className="text-sm text-muted-foreground">
-                            {meeting.description}
+              ) : (
+                <RadioGroup
+                  value={selectedResubmitMeetingId}
+                  onValueChange={setSelectedResubmitMeetingId}
+                >
+                  {upcomingMeetings.map((meeting) => (
+                    <div key={meeting.id} className="flex items-center space-x-2 py-2">
+                      <RadioGroupItem value={meeting.id} id={`resubmit-${meeting.id}`} />
+                      <Label htmlFor={`resubmit-${meeting.id}`} className="cursor-pointer flex-1">
+                        <div>
+                          <div className="font-medium">
+                            {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
                           </div>
-                        )}
-                      </div>
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-              
-              {upcomingMeetings.length === 0 && (
-                <p className="text-sm text-muted-foreground py-4">
-                  No upcoming meetings found. You can resubmit the case without assignment.
-                </p>
+                          {meeting.description && (
+                            <div className="text-sm text-muted-foreground">
+                              {meeting.description}
+                            </div>
+                          )}
+                        </div>
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               )}
             </div>
           )}
@@ -1965,7 +2038,10 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
             >
               Cancel
             </Button>
-            <Button onClick={handleResubmit} disabled={submitting || loadingMeetings}>
+            <Button 
+              onClick={handleResubmit} 
+              disabled={submitting || loadingMeetings || !selectedResubmitMeetingId || selectedResubmitMeetingId === "none" || upcomingMeetings.length === 0}
+            >
               {submitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />

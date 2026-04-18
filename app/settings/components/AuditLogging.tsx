@@ -225,6 +225,16 @@ export function AuditLogging() {
         return formatRichText(value).trim();
       }
 
+      // Check if it's an array of simple strings (e.g. department names)
+      if (Array.isArray(value) && value.length > 0 && value.every((v) => typeof v === "string")) {
+        return value.join(", ");
+      }
+
+      // Check if it's an empty array
+      if (Array.isArray(value) && value.length === 0) {
+        return "-";
+      }
+
       // Check if it's an array of links
       if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object") {
         const first = value[0];
