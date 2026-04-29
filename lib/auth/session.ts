@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest } from "next/server";
 import { authOptions } from "./authOptions";
+import { SESSION_COOKIE_NAME } from "./cookies";
 
 export async function getSession(request?: NextRequest) {
   // This will be used in server components/pages
@@ -13,7 +14,8 @@ export async function getCurrentUser(request?: NextRequest) {
   
   const token = await getToken({ 
     req: request,
-    secret: process.env.NEXTAUTH_SECRET 
+    secret: process.env.NEXTAUTH_SECRET,
+    cookieName: SESSION_COOKIE_NAME,
   });
   
   if (!token) return null;

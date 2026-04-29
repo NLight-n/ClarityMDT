@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from "./lib/auth/cookies";
 
 /**
  * HIPAA Compliance Middleware
@@ -75,7 +76,7 @@ export async function middleware(request: NextRequest) {
   const token = await getToken({
     req: request,
     secret: process.env.NEXTAUTH_SECRET,
-    cookieName: "next-auth.session-token",
+    cookieName: SESSION_COOKIE_NAME,
   });
 
   // Strict validation: token must exist AND have all required fields with valid values
@@ -99,6 +100,8 @@ export async function middleware(request: NextRequest) {
     response.cookies.delete("__Secure-next-auth.session-token");
     response.cookies.delete("next-auth.csrf-token");
     response.cookies.delete("__Host-next-auth.csrf-token");
+    response.cookies.delete(SESSION_COOKIE_NAME);
+    response.cookies.delete(CSRF_COOKIE_NAME);
 
     // Explicitly set cookies to expire to clear them
     const cookieOptions = {
@@ -110,6 +113,8 @@ export async function middleware(request: NextRequest) {
     // Clear session token
     response.cookies.set("next-auth.session-token", "", cookieOptions);
     response.cookies.set("__Secure-next-auth.session-token", "", cookieOptions);
+    response.cookies.set(SESSION_COOKIE_NAME, "", cookieOptions);
+    response.cookies.set(CSRF_COOKIE_NAME, "", cookieOptions);
 
     return response;
   }
@@ -149,4 +154,3 @@ export const config = {
     "/", // Explicitly include root path
   ],
 };
-

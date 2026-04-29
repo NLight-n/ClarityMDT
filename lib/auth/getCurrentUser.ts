@@ -1,6 +1,7 @@
 import { getToken } from "next-auth/jwt";
 import { NextRequest } from "next/server";
 import { Role } from "@prisma/client";
+import { SESSION_COOKIE_NAME } from "./cookies";
 
 export interface CurrentUser {
   id: string;
@@ -24,7 +25,7 @@ export async function getCurrentUserFromRequest(
     const token = await getToken({
       req: request,
       secret: process.env.NEXTAUTH_SECRET,
-      cookieName: "next-auth.session-token", // Match the cookie name from authOptions
+      cookieName: SESSION_COOKIE_NAME,
     });
 
     // Strict validation: token must exist and have all required fields

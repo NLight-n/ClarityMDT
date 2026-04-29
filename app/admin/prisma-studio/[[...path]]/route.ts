@@ -46,8 +46,32 @@ function shouldRewriteResponse(contentType: string | null) {
 function rewriteStudioText(text: string) {
   return text
     .replace(/(href|src)="\/(?!admin\/prisma-studio\/)([^"]*)"/g, `$1="${PROXY_PREFIX}/$2"`)
-    .replace(/(["'`])\/(?!admin\/prisma-studio\/)(bff|telemetry|adapter\.js|data\/|assets\/|favicon\.ico)/g, `$1${PROXY_PREFIX}/$2`)
+    .replace(/(["'`])\/(?!admin\/prisma-studio\/)(bff|telemetry|adapter\.js|data\/|ui\/|assets\/|favicon\.ico)/g, `$1${PROXY_PREFIX}/$2`)
     .replace(/url\(\/(?!admin\/prisma-studio\/)/g, `url(${PROXY_PREFIX}/`);
+}
+
+function applyStudioHeaders(headers: Headers) {
+  headers.delete("content-encoding");
+  headers.delete("content-length");
+  headers.delete("transfer-encoding");
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Frame-Options", "SAMEORIGIN");
+  headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  headers.set("Cross-Origin-Embedder-Policy", "unsafe-none");
+  headers.set(
+    "Content-Security-Policy",
+    [
+      "default-src 'self' https://cdn.jsdelivr.net https://esm.sh",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://esm.sh",
+      "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://esm.sh",
+      "img-src 'self' data: blob:",
+      "font-src 'self' data: https://cdn.jsdelivr.net https://esm.sh",
+      "connect-src 'self' https://cdn.jsdelivr.net https://esm.sh",
+      "frame-ancestors 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join("; ")
+  );
 }
 
 async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
@@ -76,11 +100,7 @@ async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
     } as RequestInit & { duplex?: "half" });
 
     const responseHeaders = new Headers(studioResponse.headers);
-    responseHeaders.delete("content-encoding");
-    responseHeaders.delete("content-length");
-    responseHeaders.delete("transfer-encoding");
-    responseHeaders.set("Cache-Control", "no-store");
-    responseHeaders.set("X-Frame-Options", "SAMEORIGIN");
+    applyStudioHeaders(responseHeaders);
 
     const location = responseHeaders.get("location");
     if (location?.startsWith("/")) {

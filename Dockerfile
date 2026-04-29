@@ -9,27 +9,31 @@ COPY package.json package-lock.json* ./
 # Install dependencies
 RUN npm ci
 
-# Prisma Studio runtime stage
-# This keeps the Prisma CLI out of the production Next.js image while still
-# giving docker-compose a small target that can run Studio inside the network.
-FROM deps AS prisma-studio
+# Offline-friendly Prisma Studio runtime stage
+# The app itself uses Prisma 7. This target intentionally pins only the Studio
+# container to Prisma 5, whose Studio assets are bundled instead of loaded from
+# public CDNs at runtime.
+FROM node:20-slim AS prisma-studio
 
-WORKDIR /app
+WORKDIR /studio
 
 RUN apt-get update && \
-    apt-get install -y openssl --no-install-recommends && \
+    apt-get install -y ca-certificates openssl --no-install-recommends && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-COPY prisma ./prisma
-COPY prisma.config.js ./
+RUN npm init -y && npm install prisma@5.22.0 --omit=dev
+
+COPY prisma/schema.prisma ./prisma/schema.prisma
+
+RUN node -e "const fs=require('fs'); const p='prisma/schema.prisma'; const s=fs.readFileSync(p,'utf8'); const next=s.replace(/datasource db \\{\\s*provider = \"postgresql\"\\s*\\}/, 'datasource db {\\n  provider = \"postgresql\"\\n  url      = env(\"DATABASE_URL\")\\n}'); if (next === s) throw new Error('Could not inject DATABASE_URL into Prisma Studio schema'); fs.writeFileSync(p,next);"
 
 ENV NODE_ENV=production
 ENV BROWSER=none
 
 EXPOSE 5555
 
-CMD ["npx", "prisma", "studio", "--port", "5555", "--browser", "none"]
+CMD ["./node_modules/.bin/prisma", "studio", "--schema", "/studio/prisma/schema.prisma", "--port", "5555", "--hostname", "0.0.0.0", "--browser", "none"]
 
 # Build stage
 FROM node:20-slim AS builder

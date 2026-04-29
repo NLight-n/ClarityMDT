@@ -10,6 +10,7 @@ import {
   LOGIN_RATE_LIMIT,
   type RateLimitResult
 } from "@/lib/security/rateLimit";
+import { CSRF_COOKIE_NAME, SESSION_COOKIE_NAME } from "./cookies";
 
 // Store rate limit results for failed login audit logging
 let lastRateLimitResult: RateLimitResult | null = null;
@@ -30,7 +31,7 @@ export const authOptions: NextAuthConfig = {
   cookies: {
     sessionToken: {
       // Use standard cookie name (without __Secure- prefix) for compatibility
-      name: "next-auth.session-token",
+      name: SESSION_COOKIE_NAME,
       options: {
         httpOnly: true,
         sameSite: "lax",
@@ -41,7 +42,7 @@ export const authOptions: NextAuthConfig = {
       },
     },
     csrfToken: {
-      name: "next-auth.csrf-token",
+      name: CSRF_COOKIE_NAME,
       options: {
         httpOnly: true,
         sameSite: "lax",
