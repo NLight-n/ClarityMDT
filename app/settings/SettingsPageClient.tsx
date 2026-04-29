@@ -16,6 +16,7 @@ import { Backup } from "./components/Backup";
 import { NotificationSettings } from "./components/NotificationSettings";
 import { StorageManagement } from "./components/StorageManagement";
 import { About } from "./components/About";
+import { PrismaStudio } from "./components/PrismaStudio";
 import { isAdmin, isCoordinator } from "@/lib/permissions/client";
 
 export function SettingsPageClient() {
@@ -118,6 +119,7 @@ export function SettingsPageClient() {
                 <TabsTrigger value="telegram">Telegram Settings</TabsTrigger>
                 <TabsTrigger value="whatsapp">WhatsApp Settings</TabsTrigger>
                 <TabsTrigger value="email">Email Settings</TabsTrigger>
+                <TabsTrigger value="database">Database</TabsTrigger>
               </TabsList>
               
               <TabsContent value="hospital" className="mt-6">
@@ -134,6 +136,10 @@ export function SettingsPageClient() {
               
               <TabsContent value="email" className="mt-6">
                 <EmailSettings />
+              </TabsContent>
+
+              <TabsContent value="database" className="mt-6">
+                <PrismaStudio />
               </TabsContent>
 
             </Tabs>

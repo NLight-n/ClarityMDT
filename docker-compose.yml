@@ -41,18 +41,15 @@ services:
       retries: 3
       start_period: 40s
 
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: pgadmin
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prisma-studio
+    container_name: prisma-studio
     environment:
-      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@admin.com}
-      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
-      - PGADMIN_CONFIG_SERVER_MODE=False
-      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
-    ports:
-      - "${PGADMIN_PORT:-5050}:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - DATABASE_URL=${DATABASE_URL}
+      - BROWSER=none
     networks:
       - clarityapp_network
     restart: unless-stopped
@@ -83,6 +80,8 @@ services:
       - MPR_WORKER_URL=http://mpr-worker:5100
       - MPR_ENABLED=${MPR_ENABLED:-true}
       - MPR_RESULT_EXPIRY_DAYS=${MPR_RESULT_EXPIRY_DAYS:-7}
+      # Internal Prisma Studio endpoint. Do not expose the Studio service port publicly.
+      - PRISMA_STUDIO_URL=${PRISMA_STUDIO_URL:-http://prisma-studio:5555}
     ports:
       - "${PORT}:3000"  # Map host port to container port 3000
     # Note: Don't mount volumes to /app/.next - it would override the built code
@@ -93,6 +92,8 @@ services:
       postgres:
         condition: service_healthy
       minio:
+        condition: service_started
+      prisma-studio:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)}).on('error', () => process.exit(1))\" || exit 1"]
@@ -135,8 +136,6 @@ volumes:
   postgres_data:
     driver: local
   minio_data:
-    driver: local
-  pgadmin_data:
     driver: local
 
 networks:

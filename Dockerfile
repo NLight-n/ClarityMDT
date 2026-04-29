@@ -9,6 +9,28 @@ COPY package.json package-lock.json* ./
 # Install dependencies
 RUN npm ci
 
+# Prisma Studio runtime stage
+# This keeps the Prisma CLI out of the production Next.js image while still
+# giving docker-compose a small target that can run Studio inside the network.
+FROM deps AS prisma-studio
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y openssl --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY prisma ./prisma
+COPY prisma.config.js ./
+
+ENV NODE_ENV=production
+ENV BROWSER=none
+
+EXPOSE 5555
+
+CMD ["npx", "prisma", "studio", "--port", "5555", "--browser", "none"]
+
 # Build stage
 FROM node:20-slim AS builder
 
@@ -121,4 +143,3 @@ ENV DCONF_PROFILE=""
 ENV HOME="/tmp/libreoffice-home"
 
 CMD ["node", "server.js"]
-
