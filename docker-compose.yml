@@ -82,8 +82,10 @@ services:
       - MPR_RESULT_EXPIRY_DAYS=${MPR_RESULT_EXPIRY_DAYS:-7}
       # Internal Prisma Studio endpoint. Do not expose the Studio service port publicly.
       - PRISMA_STUDIO_URL=${PRISMA_STUDIO_URL:-http://prisma-studio:5555}
-    ports:
-      - "${PORT}:3000"  # Map host port to container port 3000
+    expose:  #if Nginx is configured.
+      - "3000"
+    #ports:
+    #  - "${PORT}:3000"  # Map host port to container port 3000
     # Note: Don't mount volumes to /app/.next - it would override the built code
     networks:
       - clarityapp_network
@@ -101,6 +103,26 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  nginx:
+    image: nginx:alpine
+    container_name: clarityapp-nginx
+    ports:
+      - "${NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - clarityapp_network
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   mpr-worker:
     build:
