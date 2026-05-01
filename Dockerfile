@@ -123,11 +123,12 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy Prisma schema, migrations, config, and CLI for running `prisma migrate deploy` in production
+# Copy Prisma schema, migrations, and config for running `prisma migrate deploy` in production
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.js ./prisma.config.js
-COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+
+# Install Prisma CLI globally (with all transitive deps) for running migrations at startup
+RUN npm install -g prisma@7.8.0
 
 # Copy entrypoint script (runs migrations before starting the app)
 # Convert CRLF to LF (Windows -> Linux line endings) and make executable
