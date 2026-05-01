@@ -130,8 +130,9 @@ COPY --from=builder /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 # Copy entrypoint script (runs migrations before starting the app)
+# Convert CRLF to LF (Windows -> Linux line endings) and make executable
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
+RUN sed -i 's/\r$//' ./docker-entrypoint.sh && chmod +x ./docker-entrypoint.sh
 
 # Set ownership
 RUN chown -R nodejs:nodejs /app
@@ -156,5 +157,5 @@ ENV DCONF_PROFILE=""
 # This prevents "User installation could not be completed" errors
 ENV HOME="/tmp/libreoffice-home"
 
-CMD ["./docker-entrypoint.sh"]
+CMD ["sh", "./docker-entrypoint.sh"]
 
