@@ -97,6 +97,15 @@ export async function GET() {
       userCount,
     });
   } catch (error) {
+    // If the table doesn't exist (fresh deploy before migrations), treat as setup required
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (errorMessage.includes("does not exist") || errorMessage.includes("relation") || errorMessage.includes("P2021")) {
+      console.warn("Database tables not found — treating as fresh setup:", errorMessage);
+      return NextResponse.json({
+        setupRequired: true,
+        userCount: 0,
+      });
+    }
     console.error("Error checking setup status:", error);
     return NextResponse.json(
       { error: "Failed to check setup status" },

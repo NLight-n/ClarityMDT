@@ -38,8 +38,8 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# prisma
-/prisma/migrations
+# prisma - migrations MUST be tracked (required for production deploys)
+# /prisma/migrations
 
 # minio data directory
 /minio_data
