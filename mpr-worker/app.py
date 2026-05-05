@@ -6,7 +6,7 @@ Provides /health and /process endpoints.
 import os
 import time
 import logging
-import threading
+import traceback
 
 import requests
 from flask import Flask, request, jsonify
@@ -21,11 +21,34 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
+# --- Startup validation ---
+# Verify that SimpleITK can actually execute (not just import).
+# On python:3.11-slim, missing libgomp1 causes runtime failures.
+_simpleITK_ok = False
+_simpleITK_error = ""
+try:
+    import SimpleITK as sitk
+    import numpy as np
+    # Run a minimal SimpleITK operation to validate runtime dependencies
+    _test_img = sitk.GetImageFromArray(np.zeros((2, 2, 2), dtype=np.int16))
+    _test_img.GetSize()
+    del _test_img
+    _simpleITK_ok = True
+    logger.info("SimpleITK runtime validation passed")
+except Exception as e:
+    _simpleITK_error = f"{type(e).__name__}: {e}"
+    logger.error(f"SimpleITK runtime validation FAILED: {_simpleITK_error}")
+    logger.error("This usually means libgomp1 is missing. "
+                 "Install it with: apt-get install -y libgomp1")
+
 
 @app.route('/health', methods=['GET'])
 def health():
     """Health check endpoint for Docker."""
-    return jsonify({"status": "ok"}), 200
+    return jsonify({
+        "status": "ok" if _simpleITK_ok else "degraded",
+        "simpleITK": "ok" if _simpleITK_ok else _simpleITK_error,
+    }), 200
 
 
 @app.route('/process', methods=['POST'])
@@ -113,7 +136,9 @@ def process():
     except Exception as e:
         processing_time = int(time.time() - start_time)
         error_msg = str(e)
+        tb = traceback.format_exc()
         logger.error(f"MPR job {job_id} failed after {processing_time}s: {error_msg}")
+        logger.error(f"Traceback:\n{tb}")
 
         # Send failure callback
         send_callback(callback_url, {
