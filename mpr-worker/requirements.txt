@@ -5,3 +5,8 @@ numpy==2.1.*
 minio==7.2.*
 gunicorn==23.0.*
 requests==2.32.*
+pylibjpeg==2.0.*
+pylibjpeg-libjpeg==2.2.*
+pylibjpeg-openjpeg==2.4.*
+pylibjpeg-rle==2.0.*
+pillow>=10.0.*

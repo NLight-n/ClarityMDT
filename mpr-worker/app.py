@@ -48,7 +48,7 @@ def health():
     return jsonify({
         "status": "ok" if _simpleITK_ok else "degraded",
         "simpleITK": "ok" if _simpleITK_ok else _simpleITK_error,
-    }), 200
+    }), 200 if _simpleITK_ok else 500
 
 
 @app.route('/process', methods=['POST'])
