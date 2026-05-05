@@ -9,7 +9,7 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - /data/postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - clarityapp_network
     restart: unless-stopped
@@ -29,7 +29,7 @@ services:
       - "${MINIO_PORT}:9000"  # MinIO API port
       - "${MINIO_CONSOLE_PORT}:9001"  # MinIO Console port
     volumes:
-      - /data/minio:/data
+      - minio_data:/data
     networks:
       - clarityapp_network
     restart: unless-stopped
@@ -154,6 +154,11 @@ services:
       retries: 3
       start_period: 30s
 
+volumes:
+  postgres_data:
+    driver: local
+  minio_data:
+    driver: local
 
 networks:
   clarityapp_network:
