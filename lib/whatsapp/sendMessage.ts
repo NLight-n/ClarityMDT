@@ -108,11 +108,19 @@ export async function sendWhatsappNotificationToUser(
       return false;
     }
 
+    const hospitalSettings = await prisma.hospitalSettings.findUnique({
+      where: { id: "single" },
+      select: { name: true },
+    });
+    const hospitalName = hospitalSettings?.name || "Hospital";
+
+    const enhancedParams = [...params, hospitalName];
+
     const components: TemplateComponent[] = [];
-    if (params.length > 0) {
+    if (enhancedParams.length > 0) {
       components.push({
         type: "body",
-        parameters: params.map((text) => ({ type: "text" as const, text })),
+        parameters: enhancedParams.map((text) => ({ type: "text" as const, text })),
       });
     }
 

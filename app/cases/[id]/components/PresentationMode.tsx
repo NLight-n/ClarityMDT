@@ -210,14 +210,14 @@ export function PresentationMode({ caseData, onClose }: PresentationModeProps) {
                   <Button size="sm" variant="secondary" className="ml-2">Open OHIF</Button>
                 </div>
               ))}
-              {webLinks.map((link: any) => (
-                <div key={link.id} className="flex items-center p-3 rounded-lg border border-border/50 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer" onClick={() => handleOpenOHIF(`/ohif-viewer/viewer?url=${encodeURIComponent(link.url)}`)}>
+              {webLinks.map((link: any, index: number) => (
+                <div key={index} className="flex items-center p-3 rounded-lg border border-border/50 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer" onClick={() => handleOpenOHIF(link.url)}>
                   <MonitorPlay className="h-10 w-10 text-indigo-600 mr-4 flex-shrink-0" />
                   <div className="flex-1 overflow-hidden">
-                    <p className="font-semibold truncate text-base">{link.name}</p>
-                    <p className={`text-sm ${textMutedClass}`}>{link.type === "PACSONE" ? "PacsOne Format" : "Web URL"}</p>
+                    <p className="font-semibold truncate text-base">{link.label || link.name}</p>
+                    <p className={`text-sm ${textMutedClass}`}>Web URL</p>
                   </div>
-                  <Button size="sm" variant="secondary" className="ml-2">Open OHIF</Button>
+                  <Button size="sm" variant="secondary" className="ml-2">Open Link</Button>
                 </div>
               ))}
             </div>

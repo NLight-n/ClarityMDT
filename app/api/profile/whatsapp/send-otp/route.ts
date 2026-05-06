@@ -52,6 +52,12 @@ export async function POST(request: NextRequest) {
     const code = generateCode();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
+    const hospitalSettings = await prisma.hospitalSettings.findUnique({
+      where: { id: "single" },
+      select: { name: true },
+    });
+    const hospitalName = hospitalSettings?.name || "Hospital";
+
     await sendWhatsappTemplateMessage(
       whatsappPhone,
       template.name,
@@ -59,7 +65,10 @@ export async function POST(request: NextRequest) {
       [
         {
           type: "body",
-          parameters: [{ type: "text", text: code }],
+          parameters: [
+            { type: "text", text: code },
+            { type: "text", text: hospitalName }
+          ],
         },
       ]
     );

@@ -46,6 +46,12 @@ async function sendCodeViaWhatsapp(whatsappPhone: string, code: string): Promise
             return false;
         }
 
+        const hospitalSettings = await prisma.hospitalSettings.findUnique({
+            where: { id: "single" },
+            select: { name: true },
+        });
+        const hospitalName = hospitalSettings?.name || "Hospital";
+
         await sendWhatsappTemplateMessage(
             whatsappPhone,
             template.name,
@@ -55,6 +61,7 @@ async function sendCodeViaWhatsapp(whatsappPhone: string, code: string): Promise
                     type: "body",
                     parameters: [
                         { type: "text" as const, text: code },
+                        { type: "text" as const, text: hospitalName },
                     ],
                 },
             ]
