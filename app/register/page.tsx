@@ -138,9 +138,11 @@ function RegisterPageContent() {
   const meetingDate = new Date(currentMeeting.date);
 
   return (
-    <div className="container mx-auto p-3 md:p-6">
-      <div className="mb-4 md:mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2 md:mb-4">MDT Register</h1>
+    <div className="container mx-auto p-3 md:px-4 md:py-3">
+      <div className="mb-3 md:mb-2">
+        <div className="md:hidden">
+          <h1 className="text-2xl font-bold mb-2">MDT Register</h1>
+        </div>
         
         {/* Mobile Navigation - Compact Layout */}
         <div className="md:hidden">
@@ -186,51 +188,51 @@ function RegisterPageContent() {
           </div>
         </div>
 
-        {/* Desktop Navigation - Original Layout */}
-        <div className="hidden md:flex items-center justify-between">
-          <Button
-            variant="outline"
-            onClick={handlePreviousMeeting}
-            disabled={!navigation?.previous}
-            className="flex items-center gap-2"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            {navigation?.previous ? (
-              <span>Previous: {format(new Date(navigation.previous.date), "MMM dd, yyyy")}</span>
-            ) : (
-              <span>Previous</span>
-            )}
-          </Button>
-
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-2">
-              <p className="text-lg font-semibold">
-                {format(meetingDate, "MMMM dd, yyyy")}
-              </p>
-              <Badge className="h-6 w-6 rounded-full p-0 flex items-center justify-center text-xs font-semibold">
-                {currentMeeting.cases.length}
-              </Badge>
-            </div>
-            {currentMeeting.description && (
-              <p className="text-sm text-muted-foreground mt-1">
-                {currentMeeting.description}
-              </p>
-            )}
+        {/* Desktop Navigation - Compact Single Row */}
+        <div className="hidden md:grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          <div className="flex justify-start">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePreviousMeeting}
+              disabled={!navigation?.previous}
+              className="h-8 flex items-center gap-1.5 px-3"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              {navigation?.previous ? (
+                <span>Previous: {format(new Date(navigation.previous.date), "MMM dd, yyyy")}</span>
+              ) : (
+                <span>Previous</span>
+              )}
+            </Button>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={handleNextMeeting}
-            disabled={!navigation?.next}
-            className="flex items-center gap-2"
-          >
-            {navigation?.next ? (
-              <span>Next: {format(new Date(navigation.next.date), "MMM dd, yyyy")}</span>
-            ) : (
-              <span>Next</span>
-            )}
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="min-w-0 text-center">
+            <p className="text-base font-semibold leading-tight whitespace-nowrap">
+              {format(meetingDate, "MMMM dd, yyyy")}
+            </p>
+            <p className="text-xs text-muted-foreground leading-tight truncate max-w-[34rem]">
+              {currentMeeting.cases.length} {currentMeeting.cases.length === 1 ? "case" : "cases"}
+              {currentMeeting.description ? ` - ${currentMeeting.description}` : ""}
+            </p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextMeeting}
+              disabled={!navigation?.next}
+              className="h-8 flex items-center gap-1.5 px-3"
+            >
+              {navigation?.next ? (
+                <span>Next: {format(new Date(navigation.next.date), "MMM dd, yyyy")}</span>
+              ) : (
+                <span>Next</span>
+              )}
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 

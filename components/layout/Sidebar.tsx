@@ -30,7 +30,7 @@ export const navigation = [
     icon: LayoutDashboard,
   },
   {
-    name: "Register",
+    name: "MDT Register",
     href: "/register",
     icon: ClipboardList,
   },
