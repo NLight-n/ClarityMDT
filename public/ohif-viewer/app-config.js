@@ -1,5 +1,53 @@
 /** @type {AppTypes.Config} */
 
+const clarityMdtViewerProfiles = {
+  lite: {
+    label: 'Lite',
+    maxNumberOfWebWorkers: 1,
+    maxNumRequests: {
+      interaction: 8,
+      thumbnail: 2,
+      prefetch: 2,
+    },
+  },
+  full: {
+    label: 'Full',
+    maxNumberOfWebWorkers: 3,
+    maxNumRequests: {
+      interaction: 100,
+      thumbnail: 75,
+      prefetch: 25,
+    },
+  },
+};
+
+function getClarityMdtViewerProfile() {
+  const validProfiles = new Set(Object.keys(clarityMdtViewerProfiles));
+  const defaultProfile = 'lite';
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const queryProfile = (params.get('profile') || params.get('viewerMode') || '').toLowerCase();
+    if (validProfiles.has(queryProfile)) {
+      localStorage.setItem('clarityMdtOhifViewerMode', queryProfile);
+      return queryProfile;
+    }
+
+    const storedProfile = (localStorage.getItem('clarityMdtOhifViewerMode') || '').toLowerCase();
+    if (validProfiles.has(storedProfile)) {
+      return storedProfile;
+    }
+  } catch (error) {
+    console.warn('Unable to read OHIF viewer mode preference, falling back to Lite mode.', error);
+  }
+
+  return defaultProfile;
+}
+
+const clarityMdtViewerMode = getClarityMdtViewerProfile();
+const clarityMdtViewerProfile = clarityMdtViewerProfiles[clarityMdtViewerMode];
+window.__CLARITY_MDT_OHIF_VIEWER_MODE__ = clarityMdtViewerMode;
+
 window.config = {
   name: 'config/default.js',
   routerBasename: '/ohif-viewer/',
@@ -22,8 +70,8 @@ window.config = {
     },
   },
   showStudyList: true,
-  // some windows systems have issues with more than 3 web workers
-  maxNumberOfWebWorkers: 3,
+  // ClarityMDT defaults to Lite mode for smoother MDT presentation on shared/low-resource PCs.
+  maxNumberOfWebWorkers: clarityMdtViewerProfile.maxNumberOfWebWorkers,
   // below flag is for performance reasons, but it might not work for all servers
   showWarningMessageForCrossOrigin: true,
   showCPUFallbackMessage: true,
@@ -32,13 +80,8 @@ window.config = {
   strictZSpacingForVolumeViewport: true,
   groupEnabledModesFirst: true,
   allowMultiSelectExport: false,
-  maxNumRequests: {
-    interaction: 100,
-    thumbnail: 75,
-    // Prefetch number is dependent on the http protocol. For http 2 or
-    // above, the number of requests can be go a lot higher.
-    prefetch: 25,
-  },
+  maxNumRequests: clarityMdtViewerProfile.maxNumRequests,
+  useNorm16Texture: true,
   showErrorDetails: 'always', // 'always', 'dev', 'production'
   investigationalUseDialog: {
     option: 'never',

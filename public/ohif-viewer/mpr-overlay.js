@@ -15,6 +15,9 @@
   const MIN_SLICES_FOR_MPR = 20;
   const POLL_INTERVAL_MS = 3000;
   const RELOAD_DELAY_MS = 1500;
+  const VIEWER_MODE_STORAGE_KEY = 'clarityMdtOhifViewerMode';
+  const LOADING_BAR_HIDE_DELAY_MS = 900;
+  const LOADING_SESSION_RESET_DELAY_MS = 4000;
 
   // --- Helpers ---
   function getAttachmentId() {
@@ -26,16 +29,108 @@
     return match ? match[1] : null;
   }
 
+  function getViewerMode() {
+    const fromConfig = window.__CLARITY_MDT_OHIF_VIEWER_MODE__;
+    if (fromConfig === 'full' || fromConfig === 'lite') return fromConfig;
+
+    try {
+      const stored = localStorage.getItem(VIEWER_MODE_STORAGE_KEY);
+      return stored === 'full' ? 'full' : 'lite';
+    } catch (error) {
+      return 'lite';
+    }
+  }
+
+  function setViewerMode(mode) {
+    try {
+      localStorage.setItem(VIEWER_MODE_STORAGE_KEY, mode);
+    } catch (error) {
+      // Ignore storage failures. The current page can still continue normally.
+    }
+  }
+
   // Only activate on viewer pages with a manifest URL
   if (!getAttachmentId()) return;
 
   // --- Styles ---
   const STYLES = `
-    #mpr-overlay-btn {
+    #clarity-viewer-controls {
       position: fixed;
       bottom: 24px;
       right: 24px;
       z-index: 99999;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+    }
+
+    #viewer-mode-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: rgba(24, 24, 37, 0.96);
+      color: #f4f4f5;
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.28);
+      transition: all 0.2s ease;
+      letter-spacing: 0.2px;
+      white-space: nowrap;
+    }
+    #viewer-mode-toggle:hover {
+      transform: translateY(-2px);
+      background: rgba(39, 39, 55, 0.98);
+      border-color: rgba(255,255,255,0.22);
+    }
+    #viewer-mode-toggle:active {
+      transform: translateY(0);
+    }
+    #viewer-mode-toggle .viewer-mode-label {
+      min-width: 26px;
+      color: #a1a1aa;
+      font-size: 12px;
+      text-align: center;
+      transition: color 0.2s ease;
+    }
+    #viewer-mode-toggle .viewer-mode-label-active {
+      color: #f4f4f5;
+    }
+    #viewer-mode-toggle .viewer-mode-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+      border-radius: 999px;
+      background: rgba(34,197,94,0.22);
+      border: 1px solid rgba(34,197,94,0.35);
+      box-shadow: inset 0 1px 4px rgba(0,0,0,0.28);
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+    #viewer-mode-toggle .viewer-mode-knob {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 999px;
+      background: #f8fafc;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+      transition: transform 0.2s ease;
+    }
+    #viewer-mode-toggle.viewer-mode-full .viewer-mode-switch {
+      background: rgba(245,158,11,0.28);
+      border-color: rgba(245,158,11,0.5);
+    }
+    #viewer-mode-toggle.viewer-mode-full .viewer-mode-knob {
+      transform: translateX(22px);
+    }
+
+    #mpr-overlay-btn {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -58,6 +153,68 @@
     }
     #mpr-overlay-btn:active {
       transform: translateY(0);
+    }
+
+    #clarity-dicom-loading {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      z-index: 99999;
+      width: min(360px, calc(100vw - 32px));
+      transform: translate(-50%, 8px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+    }
+    #clarity-dicom-loading.visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    .clarity-loading-shell {
+      overflow: hidden;
+      border-radius: 999px;
+      background: rgba(24, 24, 37, 0.94);
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    }
+    .clarity-loading-track {
+      height: 4px;
+      background: rgba(255,255,255,0.12);
+      overflow: hidden;
+    }
+    .clarity-loading-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #22c55e, #38bdf8);
+      transition: width 0.18s ease;
+    }
+    .clarity-loading-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 6px 10px 7px;
+      color: #e4e4e7;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    .clarity-loading-count {
+      color: #a1a1aa;
+      font-variant-numeric: tabular-nums;
+    }
+
+    @media (max-width: 640px) {
+      #clarity-viewer-controls {
+        right: 12px;
+        bottom: 12px;
+        flex-direction: column;
+        align-items: flex-end;
+      }
+      #clarity-dicom-loading {
+        bottom: 84px;
+      }
     }
 
     #mpr-modal-backdrop {
@@ -389,14 +546,204 @@
   let modalOpen = false;
   let seriesData = null;
   let pollingTimers = {};
+  let loadingBar = null;
+  let loadingFill = null;
+  let loadingCount = null;
+  let dicomLoadStarted = 0;
+  let dicomLoadCompleted = 0;
+  let activeDicomRequests = 0;
+  let loadingHideTimer = null;
+  let loadingSessionResetTimer = null;
 
-  // --- Create floating button ---
+  // --- Create floating controls ---
+  const controls = document.createElement('div');
+  controls.id = 'clarity-viewer-controls';
+
+  const modeToggle = document.createElement('button');
+  modeToggle.id = 'viewer-mode-toggle';
+  modeToggle.type = 'button';
+  modeToggle.addEventListener('click', toggleViewerMode);
+
   const btn = document.createElement('button');
   btn.id = 'mpr-overlay-btn';
-  btn.innerHTML = '⚡ Server MPR';
+  btn.type = 'button';
+  btn.innerHTML = 'Server MPR';
   btn.title = 'Generate server-side MPR reconstructions';
   btn.addEventListener('click', openModal);
-  document.body.appendChild(btn);
+
+  controls.appendChild(modeToggle);
+  controls.appendChild(btn);
+  document.body.appendChild(controls);
+  renderModeToggle();
+  setupDicomLoadingIndicator();
+
+  function renderModeToggle() {
+    const mode = getViewerMode();
+    const nextMode = mode === 'full' ? 'Lite' : 'Full';
+    modeToggle.classList.toggle('viewer-mode-full', mode === 'full');
+    modeToggle.innerHTML = `
+      <span class="viewer-mode-label ${mode === 'lite' ? 'viewer-mode-label-active' : ''}">Lite</span>
+      <span class="viewer-mode-switch" aria-hidden="true">
+        <span class="viewer-mode-knob"></span>
+      </span>
+      <span class="viewer-mode-label ${mode === 'full' ? 'viewer-mode-label-active' : ''}">Full</span>
+    `;
+    modeToggle.title = `Switch to ${nextMode} mode. The viewer will reload to apply the change.`;
+    modeToggle.setAttribute('aria-label', modeToggle.title);
+    modeToggle.setAttribute('aria-pressed', mode === 'full' ? 'true' : 'false');
+  }
+
+  function toggleViewerMode() {
+    const currentMode = getViewerMode();
+    const nextMode = currentMode === 'full' ? 'lite' : 'full';
+    const nextLabel = nextMode === 'full' ? 'Full' : 'Lite';
+    const proceed = confirm(`Switch to ${nextLabel} mode? The viewer will reload to apply the new OHIF settings.`);
+    if (!proceed) return;
+
+    setViewerMode(nextMode);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('profile');
+    url.searchParams.delete('viewerMode');
+    window.location.replace(url.toString());
+  }
+
+  function setupDicomLoadingIndicator() {
+    if (window.__CLARITY_MDT_DICOM_LOADING_PATCHED__) return;
+    window.__CLARITY_MDT_DICOM_LOADING_PATCHED__ = true;
+
+    patchFetchForDicomLoading();
+    patchXhrForDicomLoading();
+  }
+
+  function isDicomImageRequest(resource) {
+    try {
+      const url =
+        typeof resource === 'string'
+          ? resource
+          : resource && typeof resource.url === 'string'
+            ? resource.url
+            : '';
+
+      return url.includes('/api/dicom-proxy');
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function ensureLoadingBar() {
+    if (loadingBar) return;
+
+    loadingBar = document.createElement('div');
+    loadingBar.id = 'clarity-dicom-loading';
+    loadingBar.innerHTML = `
+      <div class="clarity-loading-shell">
+        <div class="clarity-loading-track">
+          <div class="clarity-loading-fill"></div>
+        </div>
+        <div class="clarity-loading-meta">
+          <span>Loading images</span>
+          <span class="clarity-loading-count">0/0</span>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(loadingBar);
+    loadingFill = loadingBar.querySelector('.clarity-loading-fill');
+    loadingCount = loadingBar.querySelector('.clarity-loading-count');
+  }
+
+  function beginDicomRequest() {
+    ensureLoadingBar();
+
+    if (loadingHideTimer) {
+      clearTimeout(loadingHideTimer);
+      loadingHideTimer = null;
+    }
+    if (loadingSessionResetTimer) {
+      clearTimeout(loadingSessionResetTimer);
+      loadingSessionResetTimer = null;
+    }
+
+    dicomLoadStarted += 1;
+    activeDicomRequests += 1;
+    updateLoadingBar();
+  }
+
+  function finishDicomRequest() {
+    if (activeDicomRequests > 0) activeDicomRequests -= 1;
+    if (dicomLoadCompleted < dicomLoadStarted) dicomLoadCompleted += 1;
+
+    updateLoadingBar();
+
+    if (activeDicomRequests === 0) {
+      loadingHideTimer = setTimeout(() => {
+        if (activeDicomRequests === 0 && loadingBar) {
+          loadingBar.classList.remove('visible');
+        }
+      }, LOADING_BAR_HIDE_DELAY_MS);
+
+      loadingSessionResetTimer = setTimeout(() => {
+        if (activeDicomRequests === 0) {
+          dicomLoadStarted = 0;
+          dicomLoadCompleted = 0;
+          if (loadingFill) loadingFill.style.width = '0%';
+          if (loadingCount) loadingCount.textContent = '0/0';
+        }
+      }, LOADING_SESSION_RESET_DELAY_MS);
+    }
+  }
+
+  function updateLoadingBar() {
+    if (!loadingBar || !loadingFill || !loadingCount) return;
+
+    const ratio = dicomLoadStarted > 0 ? dicomLoadCompleted / dicomLoadStarted : 0;
+    const width = activeDicomRequests > 0 ? Math.min(95, Math.max(8, ratio * 100)) : 100;
+    loadingFill.style.width = `${width}%`;
+    loadingCount.textContent = `${dicomLoadCompleted}/${dicomLoadStarted}`;
+    loadingBar.classList.add('visible');
+  }
+
+  function patchFetchForDicomLoading() {
+    if (typeof window.fetch !== 'function') return;
+
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = function patchedFetch(resource, init) {
+      const shouldTrack = isDicomImageRequest(resource);
+      if (shouldTrack) beginDicomRequest();
+
+      try {
+        const result = originalFetch(resource, init);
+        if (shouldTrack && result && typeof result.finally === 'function') {
+          return result.finally(finishDicomRequest);
+        }
+        if (shouldTrack) finishDicomRequest();
+        return result;
+      } catch (error) {
+        if (shouldTrack) finishDicomRequest();
+        throw error;
+      }
+    };
+  }
+
+  function patchXhrForDicomLoading() {
+    if (typeof window.XMLHttpRequest !== 'function') return;
+
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function patchedOpen(method, url) {
+      this.__clarityMdtTracksDicomLoad = isDicomImageRequest(url);
+      return originalOpen.apply(this, arguments);
+    };
+
+    XMLHttpRequest.prototype.send = function patchedSend() {
+      if (this.__clarityMdtTracksDicomLoad) {
+        beginDicomRequest();
+        this.addEventListener('loadend', finishDicomRequest, { once: true });
+      }
+
+      return originalSend.apply(this, arguments);
+    };
+  }
 
   // --- Modal ---
   function openModal() {
@@ -687,7 +1034,7 @@
       if (interceptorCooldown) return;
 
       // Make sure we never intercept clicks on our own custom UI elements!
-      if (e.target.closest('#mpr-overlay-btn, #mpr-warning-backdrop, #mpr-modal-backdrop')) {
+      if (e.target.closest('#clarity-viewer-controls, #mpr-warning-backdrop, #mpr-modal-backdrop')) {
         return;
       }
 
