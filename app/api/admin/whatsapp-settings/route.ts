@@ -21,17 +21,23 @@ export async function GET(request: NextRequest) {
     if (!settings) {
       return NextResponse.json({
         enabled: false,
+        provider: "META",
         phoneNumberId: null,
         businessAccountId: null,
         accessToken: null,
+        accountId: null,
+        wabaNumber: null,
       });
     }
 
     return NextResponse.json({
       enabled: settings.enabled,
+      provider: settings.provider,
       phoneNumberId: settings.phoneNumberId,
       businessAccountId: settings.businessAccountId,
       accessToken: settings.accessToken ? "***masked***" : null,
+      accountId: settings.accountId,
+      wabaNumber: settings.wabaNumber,
     });
   } catch (error) {
     console.error("Error fetching WhatsApp settings:", error);
@@ -53,7 +59,15 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { enabled, phoneNumberId, businessAccountId, accessToken } = body;
+    const {
+      enabled,
+      provider,
+      phoneNumberId,
+      businessAccountId,
+      accessToken,
+      accountId,
+      wabaNumber,
+    } = body;
 
     const encryptionKey = process.env.NEXTAUTH_SECRET;
     if (!encryptionKey) {
@@ -69,6 +83,11 @@ export async function PATCH(request: NextRequest) {
       updateData.enabled = enabled;
     }
 
+    if (provider !== undefined) {
+      updateData.provider = provider;
+    }
+
+    // Meta fields
     if (phoneNumberId !== undefined) {
       updateData.phoneNumberId = phoneNumberId?.trim() || null;
     }
@@ -85,23 +104,38 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
+    // Zestwings fields
+    if (accountId !== undefined) {
+      updateData.accountId = accountId?.trim() || null;
+    }
+
+    if (wabaNumber !== undefined) {
+      updateData.wabaNumber = wabaNumber?.trim() || null;
+    }
+
     const updatedSettings = await prisma.whatsappSettings.upsert({
       where: { id: "single" },
       update: updateData,
       create: {
         id: "single",
         enabled: enabled ?? false,
+        provider: provider ?? "META",
         phoneNumberId: phoneNumberId?.trim() || null,
         businessAccountId: businessAccountId?.trim() || null,
         accessToken: updateData.accessToken || null,
+        accountId: accountId?.trim() || null,
+        wabaNumber: wabaNumber?.trim() || null,
       },
     });
 
     return NextResponse.json({
       enabled: updatedSettings.enabled,
+      provider: updatedSettings.provider,
       phoneNumberId: updatedSettings.phoneNumberId,
       businessAccountId: updatedSettings.businessAccountId,
       accessToken: updatedSettings.accessToken ? "***masked***" : null,
+      accountId: updatedSettings.accountId,
+      wabaNumber: updatedSettings.wabaNumber,
     });
   } catch (error) {
     console.error("Error updating WhatsApp settings:", error);

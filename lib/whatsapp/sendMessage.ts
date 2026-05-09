@@ -1,19 +1,20 @@
 /**
- * Utility functions for sending WhatsApp notifications via Meta Cloud API
+ * Utility functions for sending WhatsApp notifications
+ * Supports both Meta Cloud API (direct) and Zestwings aggregator API
  */
 
-import { getWhatsappSettings } from "./getSettings";
+import { getWhatsappSettings, WhatsappSettingsResult } from "./getSettings";
 import { prisma } from "@/lib/prisma";
 import { NotificationType, WhatsappTemplateStatus } from "@prisma/client";
 
 const META_API_VERSION = "v21.0";
 
 /**
- * Convert E.164 phone number to digits-only format for Meta API
+ * Convert E.164 phone number to digits-only format
  * e.g. "+919876543210" -> "919876543210"
  */
-function toMetaPhoneFormat(phone: string): string {
-  return phone.replace(/^\+/, "");
+function toDigitsOnly(phone: string): string {
+  return phone.replace(/[^0-9]/g, "");
 }
 
 interface TemplateComponent {
@@ -26,27 +27,24 @@ interface TemplateComponent {
   index?: number;
 }
 
-/**
- * Send a WhatsApp template message to a phone number
- */
-export async function sendWhatsappTemplateMessage(
-  phone: string,
+// ─────────────────────────────────────────────────────────
+// Meta Cloud API (direct)
+// ─────────────────────────────────────────────────────────
+
+async function sendViaMetaApi(
+  settings: WhatsappSettingsResult,
+  recipientPhone: string,
   templateName: string,
   languageCode: string,
   components?: TemplateComponent[]
 ): Promise<boolean> {
-  const settings = await getWhatsappSettings();
-
-  if (!settings || !settings.accessToken || !settings.phoneNumberId) {
-    console.error("WhatsApp not configured or disabled");
-    throw new Error("WhatsApp not configured or disabled");
+  if (!settings.accessToken || !settings.phoneNumberId) {
+    throw new Error("Meta WhatsApp not configured: missing accessToken or phoneNumberId");
   }
-
-  const recipientPhone = toMetaPhoneFormat(phone);
 
   const body: any = {
     messaging_product: "whatsapp",
-    to: recipientPhone,
+    to: toDigitsOnly(recipientPhone),
     type: "template",
     template: {
       name: templateName,
@@ -74,11 +72,117 @@ export async function sendWhatsappTemplateMessage(
 
   if (!response.ok) {
     const error = await response.json();
-    console.error("Error sending WhatsApp message:", error);
+    console.error("Error sending WhatsApp message via Meta:", error);
     throw error;
   }
 
   return true;
+}
+
+// ─────────────────────────────────────────────────────────
+// Zestwings Aggregator API
+// ─────────────────────────────────────────────────────────
+
+async function sendViaZestwings(
+  settings: WhatsappSettingsResult,
+  recipientPhone: string,
+  templateName: string,
+  components?: TemplateComponent[],
+  fileUrl?: string,
+  visitId?: string,
+  mrNo?: string
+): Promise<boolean> {
+  if (!settings.accountId || !settings.businessAccountId || !settings.wabaNumber) {
+    throw new Error(
+      "Zestwings WhatsApp not configured: missing accountId, businessAccountId (WABA ID), or wabaNumber"
+    );
+  }
+
+  // Build multipart form data
+  const formData = new FormData();
+  formData.append("account_ID", settings.accountId);
+  formData.append("whatsappaccount_ID", settings.businessAccountId);
+  formData.append("waba_number", settings.wabaNumber);
+  formData.append("mobile_no", toDigitsOnly(recipientPhone));
+  formData.append("template_id", templateName);
+
+  // Extract body_parameters and header_parameters from components
+  if (components && components.length > 0) {
+    const bodyComponent = components.find((c) => c.type === "body");
+    if (bodyComponent?.parameters && bodyComponent.parameters.length > 0) {
+      const bodyParams = bodyComponent.parameters.map((p) => p.text).join(",");
+      formData.append("body_parameters", bodyParams);
+    }
+
+    const headerComponent = components.find((c) => c.type === "header");
+    if (headerComponent?.parameters && headerComponent.parameters.length > 0) {
+      const headerParams = headerComponent.parameters.map((p) => p.text).join(",");
+      formData.append("header_parameters", headerParams);
+    }
+  }
+
+  // Optional file attachment (public URL to a PDF)
+  if (fileUrl) {
+    formData.append("file", fileUrl);
+  }
+
+  // Optional reference fields
+  if (visitId) {
+    formData.append("visit_id", visitId);
+  }
+  if (mrNo) {
+    formData.append("mr_no", mrNo);
+  }
+
+  const response = await fetch("https://waba.zestwings.com/api.waba", {
+    method: "POST",
+    body: formData,
+    // Note: Don't set Content-Type header — fetch sets it automatically with boundary for FormData
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error("Error sending WhatsApp message via Zestwings:", errorText);
+    throw new Error(`Zestwings API error: ${response.status} — ${errorText}`);
+  }
+
+  const result = await response.json();
+  if (result.status !== "success") {
+    console.error("Zestwings API returned non-success:", result);
+    throw new Error(`Zestwings API error: ${JSON.stringify(result)}`);
+  }
+
+  console.log("Zestwings message sent. message_id:", result.message_id);
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────
+// Public API (provider-agnostic)
+// ─────────────────────────────────────────────────────────
+
+/**
+ * Send a WhatsApp template message to a phone number
+ * Automatically routes through the configured provider (Meta or Zestwings)
+ */
+export async function sendWhatsappTemplateMessage(
+  phone: string,
+  templateName: string,
+  languageCode: string,
+  components?: TemplateComponent[]
+): Promise<boolean> {
+  const settings = await getWhatsappSettings();
+
+  if (!settings) {
+    console.error("WhatsApp not configured or disabled");
+    throw new Error("WhatsApp not configured or disabled");
+  }
+
+  if (settings.provider === "ZESTWINGS") {
+    return sendViaZestwings(settings, phone, templateName, components);
+  }
+
+  // Default: Meta
+  return sendViaMetaApi(settings, phone, templateName, languageCode, components);
 }
 
 /**

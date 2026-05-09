@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { isAdmin } from "@/lib/permissions/accessControl";
 import { deleteTemplateFromMeta } from "@/lib/whatsapp/templateApi";
+import { getWhatsappSettings } from "@/lib/whatsapp/getSettings";
 
 /**
  * PATCH /api/admin/whatsapp-templates/[id] - Update template notification type mapping
@@ -50,7 +51,10 @@ export async function PATCH(
 }
 
 /**
- * DELETE /api/admin/whatsapp-templates/[id] - Delete a template (locally + from Meta)
+ * DELETE /api/admin/whatsapp-templates/[id] - Delete a template
+ *
+ * Meta provider: deletes from Meta API + locally
+ * Zestwings provider: deletes locally only (template still exists in Meta)
  */
 export async function DELETE(
   request: NextRequest,
@@ -75,12 +79,15 @@ export async function DELETE(
       );
     }
 
-    // Try to delete from Meta API
-    try {
-      await deleteTemplateFromMeta(template.name);
-    } catch (metaError) {
-      console.error("Error deleting template from Meta (continuing local delete):", metaError);
-      // Continue with local delete even if Meta fails
+    // Only try to delete from Meta if using Meta provider
+    const settings = await getWhatsappSettings();
+    if (settings?.provider === "META") {
+      try {
+        await deleteTemplateFromMeta(template.name);
+      } catch (metaError) {
+        console.error("Error deleting template from Meta (continuing local delete):", metaError);
+        // Continue with local delete even if Meta fails
+      }
     }
 
     // Delete locally

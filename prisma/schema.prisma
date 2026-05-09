@@ -32,6 +32,11 @@ enum TwoFactorChannel {
   WHATSAPP
 }
 
+enum WhatsappProvider {
+  META
+  ZESTWINGS
+}
+
 enum WhatsappTemplateStatus {
   PENDING
   APPROVED
@@ -337,11 +342,16 @@ model EmailSettings {
 }
 
 model WhatsappSettings {
-  id                String   @id @default("single") // Single record with fixed ID
-  enabled           Boolean  @default(false)
+  id                String            @id @default("single") // Single record with fixed ID
+  enabled           Boolean           @default(false)
+  provider          WhatsappProvider  @default(META) // Which API provider to use
+  // --- Meta Direct fields ---
   phoneNumberId     String?  // Meta WhatsApp Phone Number ID
   businessAccountId String?  // Meta WhatsApp Business Account ID
   accessToken       String?  // Encrypted Meta access token
+  // --- Zestwings fields ---
+  accountId         String?  // Zestwings Account ID
+  wabaNumber        String?  // Sender phone number (Country Code + Number, e.g. 918438996009)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

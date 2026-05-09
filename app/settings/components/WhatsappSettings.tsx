@@ -38,11 +38,16 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+type WhatsappProvider = "META" | "ZESTWINGS";
+
 interface WhatsappSettingsData {
   enabled: boolean;
+  provider: WhatsappProvider;
   phoneNumberId: string | null;
   businessAccountId: string | null;
   accessToken: string | null;
+  accountId: string | null;
+  wabaNumber: string | null;
 }
 
 interface WhatsappTemplate {
@@ -86,15 +91,21 @@ export function WhatsappSettings() {
   const [success, setSuccess] = useState<string | null>(null);
   const [settings, setSettings] = useState<WhatsappSettingsData>({
     enabled: false,
+    provider: "META",
     phoneNumberId: null,
     businessAccountId: null,
     accessToken: null,
+    accountId: null,
+    wabaNumber: null,
   });
   const [formData, setFormData] = useState({
     enabled: false,
+    provider: "META" as WhatsappProvider,
     phoneNumberId: "",
     businessAccountId: "",
     accessToken: "",
+    accountId: "",
+    wabaNumber: "",
   });
   const [showToken, setShowToken] = useState(false);
 
@@ -135,9 +146,12 @@ export function WhatsappSettings() {
   useEffect(() => {
     setFormData({
       enabled: settings.enabled,
+      provider: settings.provider || "META",
       phoneNumberId: settings.phoneNumberId || "",
       businessAccountId: settings.businessAccountId || "",
       accessToken: settings.accessToken === "***masked***" ? "" : (settings.accessToken || ""),
+      accountId: settings.accountId || "",
+      wabaNumber: settings.wabaNumber || "",
     });
   }, [settings]);
 
@@ -182,8 +196,11 @@ export function WhatsappSettings() {
     try {
       const requestBody: any = {
         enabled: formData.enabled,
+        provider: formData.provider,
         phoneNumberId: formData.phoneNumberId.trim() || null,
         businessAccountId: formData.businessAccountId.trim() || null,
+        accountId: formData.accountId.trim() || null,
+        wabaNumber: formData.wabaNumber.trim() || null,
       };
 
       if (formData.accessToken && formData.accessToken.trim() !== "") {
@@ -372,7 +389,7 @@ export function WhatsappSettings() {
         <CardHeader>
           <CardTitle>WhatsApp Settings</CardTitle>
           <CardDescription>
-            Configure WhatsApp Business API for user notifications. Requires a Meta Business Account with WhatsApp Cloud API access.
+            Configure WhatsApp Business API for user notifications. Choose between Meta (Direct API) or Zestwings (Aggregator) as your provider.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -406,63 +423,136 @@ export function WhatsappSettings() {
             {formData.enabled && (
               <>
                 <div className="space-y-2">
-                  <Label htmlFor="phoneNumberId">Phone Number ID</Label>
-                  <Input
-                    id="phoneNumberId"
-                    value={formData.phoneNumberId}
-                    onChange={(e) => setFormData({ ...formData, phoneNumberId: e.target.value })}
-                    placeholder="Enter Meta Phone Number ID"
+                  <Label htmlFor="provider">API Provider</Label>
+                  <Select
+                    value={formData.provider}
+                    onValueChange={(value) => setFormData({ ...formData, provider: value as WhatsappProvider })}
                     disabled={saving}
-                    className="font-mono text-sm"
-                  />
+                  >
+                    <SelectTrigger id="provider">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="META">Meta (Direct API)</SelectItem>
+                      <SelectItem value="ZESTWINGS">Zestwings (Aggregator)</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <p className="text-xs text-muted-foreground">
-                    Found in Meta Business Dashboard → WhatsApp → API Setup
+                    {formData.provider === "META"
+                      ? "Connect directly to Meta WhatsApp Cloud API using your own credentials"
+                      : "Route messages through Zestwings aggregator service"}
                   </p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="businessAccountId">Business Account ID (WABA ID)</Label>
-                  <Input
-                    id="businessAccountId"
-                    value={formData.businessAccountId}
-                    onChange={(e) => setFormData({ ...formData, businessAccountId: e.target.value })}
-                    placeholder="Enter WhatsApp Business Account ID"
-                    disabled={saving}
-                    className="font-mono text-sm"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Your WhatsApp Business Account ID from Meta Business settings
-                  </p>
-                </div>
+                {formData.provider === "META" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="phoneNumberId">Phone Number ID</Label>
+                      <Input
+                        id="phoneNumberId"
+                        value={formData.phoneNumberId}
+                        onChange={(e) => setFormData({ ...formData, phoneNumberId: e.target.value })}
+                        placeholder="Enter Meta Phone Number ID"
+                        disabled={saving}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Found in Meta Business Dashboard → WhatsApp → API Setup
+                      </p>
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="accessToken">Access Token</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="accessToken"
-                      type={showToken ? "text" : "password"}
-                      value={formData.accessToken}
-                      onChange={(e) => setFormData({ ...formData, accessToken: e.target.value })}
-                      placeholder={settings.accessToken === "***masked***" ? "Token is set (leave empty to keep current)" : "Enter System User access token"}
-                      disabled={saving}
-                      className="font-mono text-sm"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setShowToken(!showToken)}
-                      disabled={saving}
-                    >
-                      {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {settings.accessToken === "***masked***"
-                      ? "Token is encrypted and stored securely. Leave empty to keep current token."
-                      : "System User access token with whatsapp_business_management and whatsapp_business_messaging permissions"}
-                  </p>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="businessAccountId">Business Account ID (WABA ID)</Label>
+                      <Input
+                        id="businessAccountId"
+                        value={formData.businessAccountId}
+                        onChange={(e) => setFormData({ ...formData, businessAccountId: e.target.value })}
+                        placeholder="Enter WhatsApp Business Account ID"
+                        disabled={saving}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Your WhatsApp Business Account ID from Meta Business settings
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="accessToken">Access Token</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="accessToken"
+                          type={showToken ? "text" : "password"}
+                          value={formData.accessToken}
+                          onChange={(e) => setFormData({ ...formData, accessToken: e.target.value })}
+                          placeholder={settings.accessToken === "***masked***" ? "Token is set (leave empty to keep current)" : "Enter System User access token"}
+                          disabled={saving}
+                          className="font-mono text-sm"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setShowToken(!showToken)}
+                          disabled={saving}
+                        >
+                          {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {settings.accessToken === "***masked***"
+                          ? "Token is encrypted and stored securely. Leave empty to keep current token."
+                          : "System User access token with whatsapp_business_management and whatsapp_business_messaging permissions"}
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="accountId">Zestwings Account ID</Label>
+                      <Input
+                        id="accountId"
+                        value={formData.accountId}
+                        onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
+                        placeholder="Enter your Zestwings Account ID"
+                        disabled={saving}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Unique Account ID provided by Zestwings
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="zw-businessAccountId">WABA ID</Label>
+                      <Input
+                        id="zw-businessAccountId"
+                        value={formData.businessAccountId}
+                        onChange={(e) => setFormData({ ...formData, businessAccountId: e.target.value })}
+                        placeholder="Enter WhatsApp Business Account ID"
+                        disabled={saving}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        WhatsApp Business Account ID as provided by Zestwings
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="wabaNumber">WhatsApp Number (Sender)</Label>
+                      <Input
+                        id="wabaNumber"
+                        value={formData.wabaNumber}
+                        onChange={(e) => setFormData({ ...formData, wabaNumber: e.target.value })}
+                        placeholder="e.g. 918438996009"
+                        disabled={saving}
+                        className="font-mono text-sm"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Country Code + Number (no + or leading zeros). As approved by Meta.
+                      </p>
+                    </div>
+                  </>
+                )}
               </>
             )}
 
@@ -493,35 +583,41 @@ export function WhatsappSettings() {
               <div>
                 <CardTitle>Message Templates</CardTitle>
                 <CardDescription>
-                  Manage WhatsApp message templates. Templates must be approved by Meta before they can be used for sending notifications.
+                  {settings.provider === "ZESTWINGS"
+                    ? "Register pre-approved WhatsApp templates and map them to notification types. Templates must be created and approved in Meta Business Manager first."
+                    : "Manage WhatsApp message templates. Templates must be approved by Meta before they can be used for sending notifications."}
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSyncTemplates}
-                  disabled={syncing}
-                >
-                  {syncing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Sync Status
-                </Button>
+                {settings.provider === "META" && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncTemplates}
+                    disabled={syncing}
+                  >
+                    {syncing ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                    )}
+                    Sync Status
+                  </Button>
+                )}
                 <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
                   <DialogTrigger asChild>
                     <Button size="sm">
                       <Plus className="mr-2 h-4 w-4" />
-                      Create Template
+                      {settings.provider === "ZESTWINGS" ? "Register Template" : "Create Template"}
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[550px]">
                     <DialogHeader>
-                      <DialogTitle>Create Message Template</DialogTitle>
+                      <DialogTitle>{settings.provider === "ZESTWINGS" ? "Register Message Template" : "Create Message Template"}</DialogTitle>
                       <DialogDescription>
-                        Create a new WhatsApp message template. It will be automatically submitted to Meta for approval.
+                        {settings.provider === "ZESTWINGS"
+                          ? "Register a pre-approved WhatsApp template. Use the exact template name as approved in Meta Business Manager."
+                          : "Create a new WhatsApp message template. It will be automatically submitted to Meta for approval."}
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
@@ -652,7 +748,7 @@ export function WhatsappSettings() {
                         ) : (
                           <>
                             <Plus className="mr-2 h-4 w-4" />
-                            Create & Submit
+                            {settings.provider === "ZESTWINGS" ? "Register" : "Create & Submit"}
                           </>
                         )}
                       </Button>

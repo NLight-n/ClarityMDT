@@ -1,6 +1,10 @@
 /**
  * WhatsApp Business API template management
  * Handles creating, syncing, and deleting templates via Meta Graph API
+ *
+ * NOTE: These functions only work with the META provider.
+ * When using Zestwings, templates are managed externally in Meta Business Manager
+ * and registered locally in the app for notification-type mapping.
  */
 
 import { getWhatsappSettings } from "./getSettings";
@@ -39,12 +43,9 @@ export interface MetaTemplate {
 }
 
 /**
- * Create and submit a template for approval via Meta API
- * The template is automatically submitted for review when created
+ * Assert that Meta provider is configured. Throws if Zestwings is active.
  */
-export async function createTemplateInMeta(
-  params: CreateTemplateParams
-): Promise<{ id: string; status: string }> {
+async function getMetaSettings() {
   const settings = await getWhatsappSettings();
 
   if (
@@ -54,6 +55,25 @@ export async function createTemplateInMeta(
   ) {
     throw new Error("WhatsApp not configured or disabled");
   }
+
+  if (settings.provider !== "META") {
+    throw new Error(
+      "Template management via API is only available with the Meta (Direct) provider. " +
+      "When using Zestwings, manage templates in Meta Business Manager and register them locally."
+    );
+  }
+
+  return settings;
+}
+
+/**
+ * Create and submit a template for approval via Meta API
+ * The template is automatically submitted for review when created
+ */
+export async function createTemplateInMeta(
+  params: CreateTemplateParams
+): Promise<{ id: string; status: string }> {
+  const settings = await getMetaSettings();
 
   const components: TemplateComponent[] = [];
 
@@ -113,15 +133,7 @@ export async function createTemplateInMeta(
  * Fetch all templates from Meta API along with their current statuses
  */
 export async function fetchTemplatesFromMeta(): Promise<MetaTemplate[]> {
-  const settings = await getWhatsappSettings();
-
-  if (
-    !settings ||
-    !settings.accessToken ||
-    !settings.businessAccountId
-  ) {
-    throw new Error("WhatsApp not configured or disabled");
-  }
+  const settings = await getMetaSettings();
 
   const templates: MetaTemplate[] = [];
   let nextUrl: string | null = `https://graph.facebook.com/${META_API_VERSION}/${settings.businessAccountId}/message_templates?limit=100`;
@@ -160,15 +172,7 @@ export async function fetchTemplatesFromMeta(): Promise<MetaTemplate[]> {
 export async function deleteTemplateFromMeta(
   templateName: string
 ): Promise<boolean> {
-  const settings = await getWhatsappSettings();
-
-  if (
-    !settings ||
-    !settings.accessToken ||
-    !settings.businessAccountId
-  ) {
-    throw new Error("WhatsApp not configured or disabled");
-  }
+  const settings = await getMetaSettings();
 
   const response = await fetch(
     `https://graph.facebook.com/${META_API_VERSION}/${settings.businessAccountId}/message_templates?name=${encodeURIComponent(templateName)}`,

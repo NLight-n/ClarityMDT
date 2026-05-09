@@ -3,16 +3,29 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { isAdmin } from "@/lib/permissions/accessControl";
 import { fetchTemplatesFromMeta } from "@/lib/whatsapp/templateApi";
+import { getWhatsappSettings } from "@/lib/whatsapp/getSettings";
 import { WhatsappTemplateStatus } from "@prisma/client";
 
 /**
  * POST /api/admin/whatsapp-templates/sync - Sync template statuses from Meta API
+ *
+ * Only available when using the Meta (Direct) provider.
+ * Zestwings users manage templates externally.
  */
 export async function POST(request: NextRequest) {
   try {
     const user = await getCurrentUserFromRequest(request);
     if (!user || !isAdmin(user)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Check provider
+    const settings = await getWhatsappSettings();
+    if (settings?.provider === "ZESTWINGS") {
+      return NextResponse.json(
+        { error: "Template sync is not available with the Zestwings provider. Manage templates in Meta Business Manager and register them locally." },
+        { status: 400 }
+      );
     }
 
     // Fetch all templates from Meta

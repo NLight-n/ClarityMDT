@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { isAdmin } from "@/lib/permissions/accessControl";
 import { createTemplateInMeta } from "@/lib/whatsapp/templateApi";
+import { getWhatsappSettings } from "@/lib/whatsapp/getSettings";
 import { WhatsappTemplateStatus } from "@prisma/client";
 
 /**
@@ -30,7 +31,10 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * POST /api/admin/whatsapp-templates - Create a new template (saves locally + submits to Meta)
+ * POST /api/admin/whatsapp-templates - Create a new template
+ *
+ * Meta provider: saves locally + submits to Meta Graph API for approval
+ * Zestwings provider: saves locally only (templates managed in Meta Business Manager)
  */
 export async function POST(request: NextRequest) {
   try {
@@ -69,30 +73,40 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Try to submit to Meta API
+    // Check the provider to decide whether to submit to Meta
+    const settings = await getWhatsappSettings();
+    const provider = settings?.provider || "META";
+
     let metaTemplateId: string | null = null;
     let status: WhatsappTemplateStatus = WhatsappTemplateStatus.PENDING;
 
-    try {
-      const metaResult = await createTemplateInMeta({
-        name,
-        category,
-        language: language || "en_US",
-        headerText,
-        bodyText,
-        footerText,
-      });
-      metaTemplateId = metaResult.id;
-      // Map Meta status to our enum
-      if (metaResult.status === "APPROVED") {
-        status = WhatsappTemplateStatus.APPROVED;
-      } else if (metaResult.status === "REJECTED") {
-        status = WhatsappTemplateStatus.REJECTED;
+    if (provider === "META") {
+      // Submit to Meta API for approval
+      try {
+        const metaResult = await createTemplateInMeta({
+          name,
+          category,
+          language: language || "en_US",
+          headerText,
+          bodyText,
+          footerText,
+        });
+        metaTemplateId = metaResult.id;
+        // Map Meta status to our enum
+        if (metaResult.status === "APPROVED") {
+          status = WhatsappTemplateStatus.APPROVED;
+        } else if (metaResult.status === "REJECTED") {
+          status = WhatsappTemplateStatus.REJECTED;
+        }
+      } catch (metaError: any) {
+        console.error("Meta API error:", metaError);
+        // Save locally even if Meta fails, mark as PENDING
+        // Admin can retry sync later
       }
-    } catch (metaError: any) {
-      console.error("Meta API error:", metaError);
-      // Save locally even if Meta fails, mark as PENDING
-      // Admin can retry sync later
+    } else {
+      // Zestwings: templates are pre-approved in Meta externally
+      // Save locally as APPROVED since admin is registering an already-approved template
+      status = WhatsappTemplateStatus.APPROVED;
     }
 
     // Save locally

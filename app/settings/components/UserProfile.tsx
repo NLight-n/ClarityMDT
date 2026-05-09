@@ -43,6 +43,50 @@ const KNOWN_COUNTRY_CODES = [
 ];
 const KNOWN_CODES = KNOWN_COUNTRY_CODES.map(c => c.value);
 
+function normalizeCountryCode(countryCode: string | null | undefined, fallback = "+91") {
+  const trimmed = countryCode?.trim();
+  if (!trimmed) return fallback;
+
+  const digits = trimmed.replace(/[^\d]/g, "");
+  return digits ? `+${digits}` : fallback;
+}
+
+function splitPhoneNumber(phoneNumber: string | null | undefined, preferredCountryCode: string) {
+  const fallbackCountryCode = normalizeCountryCode(preferredCountryCode);
+  const trimmedPhone = phoneNumber?.trim();
+
+  if (!trimmedPhone) {
+    return { countryCode: fallbackCountryCode, nationalNumber: "" };
+  }
+
+  if (!trimmedPhone.startsWith("+")) {
+    return { countryCode: fallbackCountryCode, nationalNumber: trimmedPhone };
+  }
+
+  const compactPhone = `+${trimmedPhone.slice(1).replace(/[^\d]/g, "")}`;
+  const preferred = normalizeCountryCode(preferredCountryCode);
+  const knownCodes = Array.from(new Set([preferred, ...KNOWN_CODES]))
+    .filter(code => code.length > 1)
+    .sort((a, b) => b.length - a.length);
+
+  const matchedCode = compactPhone.startsWith(preferred)
+    ? preferred
+    : knownCodes.find(code => compactPhone.startsWith(code));
+
+  if (matchedCode) {
+    return {
+      countryCode: matchedCode,
+      nationalNumber: compactPhone.slice(matchedCode.length),
+    };
+  }
+
+  const fallbackMatch = compactPhone.match(/^(\+\d{1,3})(\d*)$/);
+  return {
+    countryCode: fallbackMatch?.[1] || fallbackCountryCode,
+    nationalNumber: fallbackMatch?.[2] || compactPhone.replace(/^\+/, ""),
+  };
+}
+
 export function UserProfile() {
   const { data: session, update } = useSession();
   const router = useRouter();
@@ -125,7 +169,7 @@ export function UserProfile() {
             if (hospitalResponse.ok) {
               const hospitalData = await hospitalResponse.json();
               if (hospitalData.defaultCountryCode) {
-                defaultCode = hospitalData.defaultCountryCode;
+                defaultCode = normalizeCountryCode(hospitalData.defaultCountryCode);
               }
             }
           } catch (e) {
@@ -138,25 +182,15 @@ export function UserProfile() {
             
             setOriginalPhoneNumber(userData.phoneNumber || null);
 
-            // Split existing normal phone if present
-            if (userData.phoneNumber) {
-              const match = userData.phoneNumber.match(/^(\+\d{1,4})(.*)$/);
-              if (match) {
-                setPhoneCountryCode(match[1]);
-                userData.phoneNumber = match[2];
-              } else {
-                setPhoneCountryCode(defaultCode);
-              }
-            } else {
-              setPhoneCountryCode(defaultCode);
-            }
+            const splitPhone = splitPhoneNumber(userData.phoneNumber, defaultCode);
+            setPhoneCountryCode(splitPhone.countryCode);
 
             setFormData({
               name: userData.name || "",
               loginId: userData.loginId || "",
               password: "",
               confirmPassword: "",
-              phoneNumber: userData.phoneNumber || "",
+              phoneNumber: splitPhone.nationalNumber,
               email: userData.email || "",
               medicalCouncilNumber: userData.medicalCouncilNumber || "",
               degrees: userData.degrees || "",
@@ -696,7 +730,8 @@ export function UserProfile() {
         }
       }
       // Optional fields - always include them (can be empty strings which will be converted to null)
-      const fullNewPhone = formData.phoneNumber.trim() ? `${phoneCountryCode}${formData.phoneNumber.trim()}` : null;
+      const normalizedPhoneCountryCode = normalizeCountryCode(phoneCountryCode);
+      const fullNewPhone = formData.phoneNumber.trim() ? `${normalizedPhoneCountryCode}${formData.phoneNumber.trim()}` : null;
       updateData.phoneNumber = fullNewPhone;
 
       if (whatsappOptInChecked) {
@@ -1756,12 +1791,14 @@ export function UserProfile() {
                         const response = await fetch(`/api/profile`);
                         if (response.ok) {
                           const userData = await response.json();
+                          const splitPhone = splitPhoneNumber(userData.phoneNumber, phoneCountryCode);
+                          setPhoneCountryCode(splitPhone.countryCode);
                           setFormData({
                             name: userData.name || "",
                             loginId: userData.loginId || "",
                             password: "",
                             confirmPassword: "",
-                            phoneNumber: userData.phoneNumber || "",
+                            phoneNumber: splitPhone.nationalNumber,
                             email: userData.email || "",
                             medicalCouncilNumber: userData.medicalCouncilNumber || "",
                             degrees: userData.degrees || "",
