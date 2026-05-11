@@ -35,12 +35,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const template = await prisma.whatsappTemplate.findFirst({
+    // 1. Try to find a specific AUTHENTICATION template
+    let template = await prisma.whatsappTemplate.findFirst({
       where: {
         category: "AUTHENTICATION",
         status: WhatsappTemplateStatus.APPROVED,
       },
     });
+
+    // 2. Fall back to a generic approved template
+    if (!template) {
+      template = await prisma.whatsappTemplate.findFirst({
+        where: {
+          notificationType: null,
+          status: WhatsappTemplateStatus.APPROVED,
+        },
+      });
+    }
 
     if (!template) {
       return NextResponse.json(
@@ -52,11 +63,10 @@ export async function POST(request: NextRequest) {
     const code = generateCode();
     const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-    const hospitalSettings = await prisma.hospitalSettings.findUnique({
-      where: { id: "single" },
-      select: { name: true },
-    });
-    const hospitalName = hospitalSettings?.name || "Hospital";
+    // Format for the 2-variable approved template:
+    // {{1}} = Title (bold), {{2}} = OTP message
+    const title = "WhatsApp Verification";
+    const otpMessage = `Your verification code is: ${code}\n\nThis code will expire in ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
 
     await sendWhatsappTemplateMessage(
       whatsappPhone,
@@ -66,8 +76,8 @@ export async function POST(request: NextRequest) {
         {
           type: "body",
           parameters: [
-            { type: "text", text: code },
-            { type: "text", text: hospitalName }
+            { type: "text", text: title },
+            { type: "text", text: otpMessage },
           ],
         },
       ]

@@ -187,10 +187,20 @@ export async function sendWhatsappTemplateMessage(
 
 /**
  * Send a notification to a user by their WhatsApp phone number
- * Looks up the approved template for the given notification type and sends it
+ * Looks up the approved template for the given notification type and sends it.
+ *
+ * Lookup order:
+ *   1. A template with an exact `notificationType` match
+ *   2. A generic template (`notificationType` is null) — this covers the
+ *      single approved generic template used for all notification types.
+ *
+ * The approved template body has two variables:
+ *   {{1}} = Notification title (bold)
+ *   {{2}} = Notification message
+ *
  * @param whatsappPhone - User's WhatsApp phone in E.164 format
  * @param notificationType - The notification type to look up template for
- * @param params - Template body parameters ({{1}}, {{2}}, etc.)
+ * @param params - Template body parameters [title, message]
  * @returns true if sent, false if no template found or send failed
  */
 export async function sendWhatsappNotificationToUser(
@@ -199,32 +209,35 @@ export async function sendWhatsappNotificationToUser(
   params: string[]
 ): Promise<boolean> {
   try {
-    // Find an approved template for this notification type
-    const template = await prisma.whatsappTemplate.findFirst({
+    // 1. Try to find an approved template for this specific notification type
+    let template = await prisma.whatsappTemplate.findFirst({
       where: {
         notificationType: notificationType,
         status: WhatsappTemplateStatus.APPROVED,
       },
     });
 
+    // 2. Fall back to a generic template (notificationType is null)
     if (!template) {
-      // No approved template for this type — skip silently
+      template = await prisma.whatsappTemplate.findFirst({
+        where: {
+          notificationType: null,
+          status: WhatsappTemplateStatus.APPROVED,
+        },
+      });
+    }
+
+    if (!template) {
+      // No approved template found — skip silently
       return false;
     }
 
-    const hospitalSettings = await prisma.hospitalSettings.findUnique({
-      where: { id: "single" },
-      select: { name: true },
-    });
-    const hospitalName = hospitalSettings?.name || "Hospital";
-
-    const enhancedParams = [...params, hospitalName];
-
+    // Build body components — params should be [title, message]
     const components: TemplateComponent[] = [];
-    if (enhancedParams.length > 0) {
+    if (params.length > 0) {
       components.push({
         type: "body",
-        parameters: enhancedParams.map((text) => ({ type: "text" as const, text })),
+        parameters: params.map((text) => ({ type: "text" as const, text })),
       });
     }
 

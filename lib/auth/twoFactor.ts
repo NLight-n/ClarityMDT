@@ -24,7 +24,15 @@ function generateCode(): string {
 }
 
 /**
- * Send 2FA code via WhatsApp using an AUTHENTICATION template
+ * Send 2FA code via WhatsApp using the approved generic template.
+ *
+ * The approved template has two variables:
+ *   {{1}} = Title (bold)
+ *   {{2}} = Message body
+ *
+ * Lookup order:
+ *   1. A template with category "AUTHENTICATION"
+ *   2. Any generic approved template (notificationType is null)
  */
 async function sendCodeViaWhatsapp(whatsappPhone: string, code: string): Promise<boolean> {
     try {
@@ -33,24 +41,33 @@ async function sendCodeViaWhatsapp(whatsappPhone: string, code: string): Promise
             return false;
         }
 
-        // Find an approved AUTHENTICATION template for 2FA
-        const template = await prisma.whatsappTemplate.findFirst({
+        // 1. Try to find a specific AUTHENTICATION template
+        let template = await prisma.whatsappTemplate.findFirst({
             where: {
                 category: "AUTHENTICATION",
                 status: WhatsappTemplateStatus.APPROVED,
             },
         });
 
+        // 2. Fall back to a generic approved template
         if (!template) {
-            console.error("No approved AUTHENTICATION template for WhatsApp 2FA");
+            template = await prisma.whatsappTemplate.findFirst({
+                where: {
+                    notificationType: null,
+                    status: WhatsappTemplateStatus.APPROVED,
+                },
+            });
+        }
+
+        if (!template) {
+            console.error("No approved WhatsApp template available for 2FA");
             return false;
         }
 
-        const hospitalSettings = await prisma.hospitalSettings.findUnique({
-            where: { id: "single" },
-            select: { name: true },
-        });
-        const hospitalName = hospitalSettings?.name || "Hospital";
+        // Format for the 2-variable approved template:
+        // {{1}} = Title, {{2}} = OTP message
+        const title = "Login Verification";
+        const otpMessage = `Your verification code is: ${code}\n\nThis code will expire in ${CODE_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
 
         await sendWhatsappTemplateMessage(
             whatsappPhone,
@@ -60,8 +77,8 @@ async function sendCodeViaWhatsapp(whatsappPhone: string, code: string): Promise
                 {
                     type: "body",
                     parameters: [
-                        { type: "text" as const, text: code },
-                        { type: "text" as const, text: hospitalName },
+                        { type: "text" as const, text: title },
+                        { type: "text" as const, text: otpMessage },
                     ],
                 },
             ]
