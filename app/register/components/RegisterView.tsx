@@ -141,30 +141,28 @@ export function RegisterView({ cases, loading, currentMeetingId }: RegisterViewP
           </div>
         </div>
 
-        {/* Pagination Arrow - Left (Mobile) */}
+        {/* Pagination Arrow - Left (Mobile) - Semicircle anchored to edge */}
         {totalPagesMobile > 1 && (
-          <Button
-            variant="outline"
-            size="icon"
+          <button
             onClick={handlePreviousPage}
             disabled={!hasPreviousPageMobile}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-12 z-30 h-10 w-10 rounded-full shadow-lg bg-white border-2 hover:bg-accent hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-30 h-12 w-7 flex items-center justify-center rounded-r-full bg-white/90 border border-l-0 border-gray-300 shadow-md backdrop-blur-sm hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            aria-label="Previous page"
           >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
+            <ChevronLeft className="h-4 w-4 -ml-0.5" />
+          </button>
         )}
 
-        {/* Pagination Arrow - Right (Mobile) */}
+        {/* Pagination Arrow - Right (Mobile) - Semicircle anchored to edge */}
         {totalPagesMobile > 1 && (
-          <Button
-            variant="outline"
-            size="icon"
+          <button
             onClick={handleNextPage}
             disabled={!hasNextPageMobile}
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-12 z-30 h-10 w-10 rounded-full shadow-lg bg-white border-2 hover:bg-accent hover:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-30 h-12 w-7 flex items-center justify-center rounded-l-full bg-white/90 border border-r-0 border-gray-300 shadow-md backdrop-blur-sm hover:bg-accent disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+            aria-label="Next page"
           >
-            <ChevronRight className="h-5 w-5" />
-          </Button>
+            <ChevronRight className="h-4 w-4 -mr-0.5" />
+          </button>
         )}
       </div>
 
