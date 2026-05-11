@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     // Format for the 2-variable approved template:
     // {{1}} = Title (bold), {{2}} = OTP message
     const title = "WhatsApp Verification";
-    const otpMessage = `Your verification code is: ${code}\n\nThis code will expire in ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
+    const otpMessage = `Your verification code is: ${code}. This code will expire in ${OTP_EXPIRY_MINUTES} minutes. Do not share this code with anyone.`;
 
     await sendWhatsappTemplateMessage(
       whatsappPhone,
