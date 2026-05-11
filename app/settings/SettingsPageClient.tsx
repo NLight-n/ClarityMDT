@@ -71,7 +71,7 @@ export function SettingsPageClient() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-        <TabsList className="inline-flex h-auto w-full lg:w-auto flex-nowrap overflow-x-auto scrollbar-hide gap-0.5 p-1">
+        <TabsList className="inline-flex h-auto w-full lg:w-auto flex-nowrap justify-start overflow-x-auto scrollbar-hide gap-0.5 p-1">
           <TabsTrigger value="profile">User Profile</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
@@ -114,7 +114,7 @@ export function SettingsPageClient() {
               params.set("adminTab", value);
               router.push(`/settings?tab=admin&${params.toString()}`);
             }} className="w-full">
-              <TabsList className="inline-flex h-auto w-full lg:w-auto flex-nowrap overflow-x-auto scrollbar-hide gap-0.5 p-1">
+              <TabsList className="inline-flex h-auto w-full lg:w-auto flex-nowrap justify-start overflow-x-auto scrollbar-hide gap-0.5 p-1">
                 <TabsTrigger value="hospital">Hospital Settings</TabsTrigger>
                 <TabsTrigger value="telegram">Telegram Settings</TabsTrigger>
                 <TabsTrigger value="whatsapp">WhatsApp Settings</TabsTrigger>
