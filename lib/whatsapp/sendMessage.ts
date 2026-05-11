@@ -140,13 +140,23 @@ async function sendViaZestwings(
     // Note: Don't set Content-Type header — fetch sets it automatically with boundary for FormData
   });
 
+  // Zestwings' PHP API may return HTML warnings (e.g. <br /><b>Warning</b>...)
+  // before the actual JSON payload. Read as text and extract the JSON portion.
+  const responseText = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Error sending WhatsApp message via Zestwings:", errorText);
-    throw new Error(`Zestwings API error: ${response.status} — ${errorText}`);
+    console.error("Error sending WhatsApp message via Zestwings:", responseText);
+    throw new Error(`Zestwings API error: ${response.status} — ${responseText}`);
   }
 
-  const result = await response.json();
+  // Find the first '{' to locate the start of the JSON object
+  const jsonStart = responseText.indexOf("{");
+  if (jsonStart === -1) {
+    console.error("Zestwings API returned no JSON in response:", responseText);
+    throw new Error("Zestwings API error: no JSON in response body");
+  }
+
+  const result = JSON.parse(responseText.substring(jsonStart));
   if (result.status !== "success") {
     console.error("Zestwings API returned non-success:", result);
     throw new Error(`Zestwings API error: ${JSON.stringify(result)}`);
