@@ -242,12 +242,18 @@ export async function sendWhatsappNotificationToUser(
       return false;
     }
 
+    // Sanitise params: WhatsApp template variables cannot contain
+    // new-line / tab characters or more than 4 consecutive spaces.
+    const sanitised = params.map((text) =>
+      text.replace(/[\n\r\t]+/g, " ").replace(/ {4,}/g, "   ")
+    );
+
     // Build body components — params should be [title, message]
     const components: TemplateComponent[] = [];
-    if (params.length > 0) {
+    if (sanitised.length > 0) {
       components.push({
         type: "body",
-        parameters: params.map((text) => ({ type: "text" as const, text })),
+        parameters: sanitised.map((text) => ({ type: "text" as const, text })),
       });
     }
 

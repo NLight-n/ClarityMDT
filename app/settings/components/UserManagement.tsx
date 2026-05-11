@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Role } from "@prisma/client";
-import { Loader2, Plus, Edit, Trash2, UserPlus, UserMinus, Upload, CheckCircle2, AlertCircle, MessageCircle } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, UserPlus, UserMinus, Upload, CheckCircle2, AlertCircle, MessageCircle, Phone } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { isAdmin } from "@/lib/permissions/client";
 import {
@@ -58,6 +58,7 @@ interface User {
   departmentId: string | null;
   department: Department | null;
   telegramId: string | null;
+  whatsappPhone: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -503,6 +504,16 @@ export function UserManagement() {
                           title="Telegram linked"
                         >
                           <MessageCircle className="h-4 w-4 text-blue-600" />
+                        </div>
+                      )}
+                      
+                      {/* WhatsApp Linked Indicator */}
+                      {user.whatsappPhone && (
+                        <div 
+                          className="flex items-center justify-center h-8 w-8" 
+                          title="WhatsApp linked"
+                        >
+                          <Phone className="h-4 w-4 text-green-600" />
                         </div>
                       )}
                       

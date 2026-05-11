@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         signatureUrl: true,
         signatureAuthenticated: true,
         telegramId: true,
+        whatsappPhone: true,
         department: {
           select: {
             id: true,
