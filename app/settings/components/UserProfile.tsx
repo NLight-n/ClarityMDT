@@ -222,9 +222,9 @@ export function UserProfile() {
             setTelegramEnabled(false);
           }
 
-          // Check if WhatsApp is enabled
+          // Check if WhatsApp is enabled (user-accessible endpoint)
           try {
-            const waResponse = await fetch("/api/admin/whatsapp-settings");
+            const waResponse = await fetch("/api/profile/whatsapp/status");
             if (waResponse.ok) {
               const waData = await waResponse.json();
               setWhatsappEnabled(waData.enabled || false);
