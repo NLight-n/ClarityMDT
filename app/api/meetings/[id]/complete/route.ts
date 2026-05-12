@@ -73,6 +73,7 @@ export async function POST(
       where: {
         id: { in: attendeeIds },
         role: { in: ["Consultant", "Coordinator", "Admin"] },
+        isActive: true,
       },
       select: { id: true },
     });

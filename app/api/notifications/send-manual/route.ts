@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
     if (recipientType === "everyone") {
       // Get all users
       const allUsers = await prisma.user.findMany({
+        where: { isActive: true },
         select: { id: true },
       });
       recipientIds = allUsers.map((u) => u.id);
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
 
       // Get all users in the department
       const departmentUsers = await prisma.user.findMany({
-        where: { departmentId },
+        where: { departmentId, isActive: true },
         select: { id: true },
       });
       recipientIds = departmentUsers.map((u) => u.id);

@@ -543,6 +543,7 @@ export async function PATCH(
           where: {
             departmentId: updatedCase.presentingDepartment.id,
             role: "Consultant",
+            isActive: true,
           },
           select: { id: true },
         });

@@ -59,6 +59,7 @@ export async function POST(request: NextRequest) {
         role: {
           in: ["Coordinator", "Admin"],
         },
+        isActive: true,
       },
       select: { id: true },
     });

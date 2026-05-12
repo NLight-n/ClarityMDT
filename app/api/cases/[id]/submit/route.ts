@@ -136,7 +136,7 @@ export async function POST(
 
     // Create notifications for all users about the submitted case
     if (assignedMeetingId && updatedCase.assignedMeeting && decryptedUpdatedCase) {
-      const allUsers = await prisma.user.findMany({ select: { id: true } });
+      const allUsers = await prisma.user.findMany({ where: { isActive: true }, select: { id: true } });
       const meetingDateStr = updatedCase.assignedMeeting.date.toLocaleDateString();
       const patientLabel = `${decryptedUpdatedCase.patientName} (MRN: ${decryptedUpdatedCase.mrn || "N/A"})`;
       const concernedDepartmentIds = normalizeConcernedDepartmentIds((updatedCase as any).concernedDepartmentIds);

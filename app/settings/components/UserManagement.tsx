@@ -544,7 +544,7 @@ export function UserManagement() {
                         </>
                       )}
                       
-                      {/* Delete Button */}
+                      {/* Deactivate Button */}
                       {isUserAdmin && user.id !== session?.user?.id && (
                         <Button
                           variant="ghost"
@@ -554,7 +554,7 @@ export function UserManagement() {
                             setDeletingUser(user);
                             setIsDeleteDialogOpen(true);
                           }}
-                          title="Delete user"
+                          title="Deactivate user"
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -807,14 +807,15 @@ export function UserManagement() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Deactivate Confirmation Dialog */}
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Deactivate User?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete user &quot;{deletingUser?.name}&quot;. This action
-              cannot be undone.
+              This will deactivate user &quot;{deletingUser?.name}&quot;. They will no longer
+              be able to log in or receive notifications. Their previous submissions, opinions,
+              and records will remain intact.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -822,7 +823,7 @@ export function UserManagement() {
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive">
-              Delete
+              Deactivate
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

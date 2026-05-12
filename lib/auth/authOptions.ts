@@ -98,6 +98,12 @@ export const authOptions: NextAuthConfig = {
             return null;
           }
 
+          // Block deactivated (soft-deleted) users from logging in
+          if (!user.isActive) {
+            console.warn(`Login attempt by deactivated user: ${loginId}`);
+            return null;
+          }
+
           const isPasswordValid = await bcrypt.compare(
             password,
             user.passwordHash

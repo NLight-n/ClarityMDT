@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
     // Search for consultants and coordinators (including admins)
     const users = await prisma.user.findMany({
       where: {
+        isActive: true,
         role: { in: ["Consultant", "Coordinator", "Admin"] },
         OR: [
           { name: { contains: query, mode: "insensitive" } },

@@ -116,6 +116,10 @@ model User {
   twoFactorEnabled          Boolean          @default(false) // Only effective when telegramId or whatsappPhone is set
   preferredTwoFactorChannel TwoFactorChannel @default(TELEGRAM) // Preferred channel for 2FA codes
 
+  // Soft delete: when a user is "deleted", isActive is set to false
+  // The user record is preserved so historical data (cases, opinions, meetings) remains intact
+  isActive Boolean @default(true)
+
   department          Department?          @relation(fields: [departmentId], references: [id])
   createdCases        Case[]               @relation("CaseCreator")
   specialistsOpinions SpecialistsOpinion[]

@@ -177,6 +177,7 @@ export async function POST(
             where: {
               departmentId: caseRecord.presentingDepartment.id,
               role: "Consultant",
+              isActive: true,
             },
             select: { id: true },
           });

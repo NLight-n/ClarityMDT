@@ -192,7 +192,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/users/[id] - Delete a user
+// DELETE /api/users/[id] - Soft-delete a user (deactivate)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -228,7 +228,14 @@ export async function DELETE(
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // Log audit entry before deletion
+    if (!existingUser.isActive) {
+      return NextResponse.json(
+        { error: "User is already deactivated" },
+        { status: 400 }
+      );
+    }
+
+    // Log audit entry before deactivation
     await createAuditLog({
       action: AuditAction.USER_DELETE,
       userId: user.id,
@@ -238,17 +245,27 @@ export async function DELETE(
         loginId: existingUser.loginId,
         role: existingUser.role,
         departmentId: existingUser.departmentId,
+        softDelete: true,
       },
       ipAddress: getIpAddress(request.headers),
     });
 
-    await prisma.user.delete({
+    // Soft delete: deactivate user and clear notification channels
+    await prisma.user.update({
       where: { id },
+      data: {
+        isActive: false,
+        // Clear notification channels so deactivated users don't receive messages
+        telegramId: null,
+        whatsappPhone: null,
+        whatsappConsentDate: null,
+        twoFactorEnabled: false,
+      },
     });
 
-    return NextResponse.json({ message: "User deleted successfully" });
+    return NextResponse.json({ message: "User deactivated successfully" });
   } catch (error) {
-    console.error("Error deleting user:", error);
+    console.error("Error deactivating user:", error);
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }

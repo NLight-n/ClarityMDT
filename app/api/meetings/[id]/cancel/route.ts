@@ -232,7 +232,7 @@ export async function POST(
     });
 
     // Notify all users about the cancelled meeting
-    const allUsers = await prisma.user.findMany({ select: { id: true } });
+    const allUsers = await prisma.user.findMany({ where: { isActive: true }, select: { id: true } });
     const meetingDateStr = existingMeeting.date
       ? existingMeeting.date.toLocaleDateString()
       : "the scheduled date";
@@ -254,7 +254,7 @@ export async function POST(
     const deptConsultants =
       deptIds.length > 0
         ? await prisma.user.findMany({
-            where: { departmentId: { in: deptIds }, role: "Consultant" },
+            where: { departmentId: { in: deptIds }, role: "Consultant", isActive: true },
             select: { id: true, departmentId: true },
           })
         : [];

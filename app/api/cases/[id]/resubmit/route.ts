@@ -116,7 +116,7 @@ export async function POST(
 
     // Notify all users about the resubmitted case when assigned to a meeting
     if (assignedMeetingId && updatedCase.assignedMeeting && decryptedUpdatedCase) {
-      const allUsers = await prisma.user.findMany({ select: { id: true } });
+      const allUsers = await prisma.user.findMany({ where: { isActive: true }, select: { id: true } });
       const meetingDateStr = updatedCase.assignedMeeting.date.toLocaleDateString();
       const patientLabel = `${decryptedUpdatedCase.patientName} (MRN: ${decryptedUpdatedCase.mrn || "N/A"})`;
       await createNotificationsForUsers(

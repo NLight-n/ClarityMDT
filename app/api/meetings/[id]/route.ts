@@ -196,7 +196,7 @@ export async function PATCH(
 
     // Notify all users if the meeting date was changed
     if (updateData.date && existingMeeting.date && updatedMeeting.date) {
-      const allUsers = await prisma.user.findMany({ select: { id: true } });
+      const allUsers = await prisma.user.findMany({ where: { isActive: true }, select: { id: true } });
       const oldDateStr = existingMeeting.date.toLocaleDateString();
       const newDateStr = updatedMeeting.date.toLocaleDateString();
 

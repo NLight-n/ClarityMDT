@@ -137,6 +137,7 @@ export async function POST(request: NextRequest) {
 
     // Create notifications for all users about the new meeting
     const allUsers = await prisma.user.findMany({
+      where: { isActive: true },
       select: { id: true },
     });
 
