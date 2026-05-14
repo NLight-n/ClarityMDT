@@ -35,26 +35,45 @@ export async function createNotification(params: CreateNotificationParams) {
       select: { telegramId: true, whatsappPhone: true },
     });
 
-    // Send via Telegram if user has linked telegramId
+    // Send via both channels in parallel — each channel is independent
+    // so a failure in one never blocks the other
+    const channelPromises: Promise<void>[] = [];
+
+    // Telegram channel
     if (user?.telegramId) {
-      await sendNotificationToUser(user.telegramId, `${params.title}\n${params.message}`);
+      channelPromises.push(
+        (async () => {
+          try {
+            await sendNotificationToUser(user.telegramId!, `${params.title}\n${params.message}`);
+          } catch (tgError) {
+            console.error("Telegram notification failed:", tgError);
+          }
+        })()
+      );
     }
 
-    // Send via WhatsApp if user has linked phone and WhatsApp is enabled
+    // WhatsApp channel
     if (user?.whatsappPhone) {
-      try {
-        const whatsappSettings = await getWhatsappSettings();
-        if (whatsappSettings?.enabled) {
-          await sendWhatsappNotificationToUser(
-            user.whatsappPhone,
-            params.type,
-            [params.title, params.message]
-          );
-        }
-      } catch (waError) {
-        // Silently fail — WhatsApp notifications are non-critical
-        console.error("WhatsApp notification failed:", waError);
-      }
+      channelPromises.push(
+        (async () => {
+          try {
+            const whatsappSettings = await getWhatsappSettings();
+            if (whatsappSettings?.enabled) {
+              await sendWhatsappNotificationToUser(
+                user.whatsappPhone!,
+                params.type,
+                [params.title, params.message]
+              );
+            }
+          } catch (waError) {
+            console.error("WhatsApp notification failed:", waError);
+          }
+        })()
+      );
+    }
+
+    if (channelPromises.length > 0) {
+      await Promise.allSettled(channelPromises);
     }
   } catch (error) {
     console.error("Error creating notification:", error);
@@ -81,45 +100,56 @@ export async function createNotificationsForUsers(
       })),
     });
 
-    // Telegram fan-out for linked users
-    const usersWithTelegram = await prisma.user.findMany({
-      where: { id: { in: userIds }, telegramId: { not: null } },
-      select: { telegramId: true },
-    });
+    // Send via both channels in parallel — each channel is fully independent
+    // so a failure (or slowness) in one never blocks or skips the other
+    await Promise.allSettled([
+      // Telegram fan-out
+      (async () => {
+        try {
+          const usersWithTelegram = await prisma.user.findMany({
+            where: { id: { in: userIds }, telegramId: { not: null } },
+            select: { telegramId: true },
+          });
 
-    const telegramIds = usersWithTelegram
-      .map((u) => u.telegramId)
-      .filter((id): id is string => !!id);
+          const telegramIds = usersWithTelegram
+            .map((u) => u.telegramId)
+            .filter((id): id is string => !!id);
 
-    if (telegramIds.length > 0) {
-      await sendBulkNotifications(telegramIds, `${params.title}\n${params.message}`);
-    }
-
-    // WhatsApp fan-out for linked users
-    try {
-      const whatsappSettings = await getWhatsappSettings();
-      if (whatsappSettings?.enabled) {
-        const usersWithWhatsapp = await prisma.user.findMany({
-          where: { id: { in: userIds }, whatsappPhone: { not: null } },
-          select: { whatsappPhone: true },
-        });
-
-        const phones = usersWithWhatsapp
-          .map((u) => u.whatsappPhone)
-          .filter((p): p is string => !!p);
-
-        if (phones.length > 0) {
-          await sendBulkWhatsappNotifications(
-            phones,
-            params.type,
-            [params.title, params.message]
-          );
+          if (telegramIds.length > 0) {
+            await sendBulkNotifications(telegramIds, `${params.title}\n${params.message}`);
+          }
+        } catch (tgError) {
+          console.error("Telegram bulk notification failed:", tgError);
         }
-      }
-    } catch (waError) {
-      // Silently fail — WhatsApp notifications are non-critical
-      console.error("WhatsApp bulk notification failed:", waError);
-    }
+      })(),
+
+      // WhatsApp fan-out
+      (async () => {
+        try {
+          const whatsappSettings = await getWhatsappSettings();
+          if (whatsappSettings?.enabled) {
+            const usersWithWhatsapp = await prisma.user.findMany({
+              where: { id: { in: userIds }, whatsappPhone: { not: null } },
+              select: { whatsappPhone: true },
+            });
+
+            const phones = usersWithWhatsapp
+              .map((u) => u.whatsappPhone)
+              .filter((p): p is string => !!p);
+
+            if (phones.length > 0) {
+              await sendBulkWhatsappNotifications(
+                phones,
+                params.type,
+                [params.title, params.message]
+              );
+            }
+          }
+        } catch (waError) {
+          console.error("WhatsApp bulk notification failed:", waError);
+        }
+      })(),
+    ]);
   } catch (error) {
     console.error("Error creating notifications:", error);
     // Don't throw - notifications are non-critical
