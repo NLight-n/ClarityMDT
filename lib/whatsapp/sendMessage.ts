@@ -110,13 +110,18 @@ async function sendViaZestwings(
   if (components && components.length > 0) {
     const bodyComponent = components.find((c) => c.type === "body");
     if (bodyComponent?.parameters && bodyComponent.parameters.length > 0) {
-      const bodyParams = bodyComponent.parameters.map((p) => p.text).join(",");
+      // Zestwings uses commas as parameter delimiters, so keep commas out of values.
+      const bodyParams = bodyComponent.parameters
+        .map((p) => p.text.replace(/,/g, ";"))
+        .join(",");
       formData.append("body_parameters", bodyParams);
     }
 
     const headerComponent = components.find((c) => c.type === "header");
     if (headerComponent?.parameters && headerComponent.parameters.length > 0) {
-      const headerParams = headerComponent.parameters.map((p) => p.text).join(",");
+      const headerParams = headerComponent.parameters
+        .map((p) => p.text.replace(/,/g, ";"))
+        .join(",");
       formData.append("header_parameters", headerParams);
     }
   }
@@ -220,12 +225,13 @@ export async function sendWhatsappNotificationToUser(
 ): Promise<boolean> {
   try {
     // 1. Try to find an approved template for this specific notification type
-    let template = await prisma.whatsappTemplate.findFirst({
+    const typeTemplate = await prisma.whatsappTemplate.findFirst({
       where: {
         notificationType: notificationType,
         status: WhatsappTemplateStatus.APPROVED,
       },
     });
+    let template = typeTemplate;
 
     // 2. Fall back to a generic template (notificationType is null)
     if (!template) {
@@ -257,12 +263,41 @@ export async function sendWhatsappNotificationToUser(
       });
     }
 
-    return await sendWhatsappTemplateMessage(
-      whatsappPhone,
-      template.name,
-      template.language,
-      components.length > 0 ? components : undefined
-    );
+    try {
+      return await sendWhatsappTemplateMessage(
+        whatsappPhone,
+        template.name,
+        template.language,
+        components.length > 0 ? components : undefined
+      );
+    } catch (error) {
+      if (template.notificationType === null) {
+        throw error;
+      }
+
+      console.error(
+        `Failed to send WhatsApp notification using ${notificationType} template "${template.name}"; trying generic template:`,
+        error
+      );
+
+      const genericTemplate = await prisma.whatsappTemplate.findFirst({
+        where: {
+          notificationType: null,
+          status: WhatsappTemplateStatus.APPROVED,
+        },
+      });
+
+      if (!genericTemplate || genericTemplate.id === template.id) {
+        throw error;
+      }
+
+      return await sendWhatsappTemplateMessage(
+        whatsappPhone,
+        genericTemplate.name,
+        genericTemplate.language,
+        components.length > 0 ? components : undefined
+      );
+    }
   } catch (error) {
     console.error(
       `Failed to send WhatsApp notification to ${whatsappPhone}:`,

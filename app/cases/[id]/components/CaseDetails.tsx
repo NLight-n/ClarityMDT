@@ -28,7 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { StatusBadge } from "../../components/StatusBadge";
 import { CaseStatus, Gender } from "@prisma/client";
 import { format } from "date-fns";
-import { Archive, Send, RotateCcw, Edit, Save, X, Loader2, Calendar, Trash2, FileText, MonitorPlay } from "lucide-react";
+import { Archive, Send, RotateCcw, Edit, Save, X, Loader2, Calendar, Trash2, FileText, MonitorPlay, Eye } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { isConsultant, isCoordinator, isRadOrPathConsultant } from "@/lib/permissions/client";
 import Link from "next/link";
@@ -128,7 +128,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const [submitting, setSubmitting] = useState(false);
   const [internalIsEditing, setInternalIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  
+
   // Use external edit mode if provided, otherwise use internal
   const isEditing = externalIsEditing !== undefined ? externalIsEditing : internalIsEditing;
   const setIsEditing = setExternalIsEditing || setInternalIsEditing;
@@ -152,8 +152,11 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const [attendees, setAttendees] = useState<any[]>([]);
   const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>([]);
   const [loadingAttendees, setLoadingAttendees] = useState(false);
+  const [previewingPdf, setPreviewingPdf] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [pdfPreviewError, setPdfPreviewError] = useState<string | null>(null);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
-  
+
   // MessageDialog state
   const [messageDialog, setMessageDialog] = useState<{
     open: boolean;
@@ -166,7 +169,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     title: "",
     message: "",
   });
-  
+
   // PDF section selection state - default sections checked
   const [pdfSections, setPdfSections] = useState({
     hospitalHeader: false, // Default false to leave blank space for letterhead
@@ -194,13 +197,21 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       : [],
   });
 
+  useEffect(() => {
+    return () => {
+      if (pdfPreviewUrl) {
+        window.URL.revokeObjectURL(pdfPreviewUrl);
+      }
+    };
+  }, [pdfPreviewUrl]);
+
   const user = session?.user
     ? {
-        id: session.user.id,
-        role: session.user.role,
-        departmentId: session.user.departmentId,
-        departmentName: (session.user as any).departmentName || null,
-      }
+      id: session.user.id,
+      role: session.user.role,
+      departmentId: session.user.departmentId,
+      departmentName: (session.user as any).departmentName || null,
+    }
     : null;
 
   // Can edit if:
@@ -216,12 +227,12 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     !!user.departmentId &&
     user.departmentId === caseData.presentingDepartment.id;
 
-  const canEdit = 
+  const canEdit =
     (caseData.status === CaseStatus.DRAFT && (isAuthor || isCoord)) ||
-    ((caseData.status === CaseStatus.SUBMITTED || 
+    ((caseData.status === CaseStatus.SUBMITTED ||
       caseData.status === CaseStatus.PENDING ||
       caseData.status === CaseStatus.RESUBMITTED) &&
-     (isAuthor || isCoord || isRadPath || isSameDepartmentConsultant));
+      (isAuthor || isCoord || isRadPath || isSameDepartmentConsultant));
   const canSubmit = caseData.status === CaseStatus.DRAFT;
   const canArchive = isCoordinator(user) && caseData.status !== CaseStatus.ARCHIVED;
   const canResubmit = caseData.status === CaseStatus.REVIEWED;
@@ -238,7 +249,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const isUserCreator = user ? caseData.createdBy.id === user.id : false;
   const canAssignMeeting = !hasAssignedMeeting && user && (isUserCoordinator || isUserCreator);
   // Can only unassign if not REVIEWED (unless RESUBMITTED, which allows unassigning)
-  const canUnassignMeeting = hasAssignedMeeting && user && (isUserCoordinator || isUserCreator) && 
+  const canUnassignMeeting = hasAssignedMeeting && user && (isUserCoordinator || isUserCreator) &&
     caseData.status !== CaseStatus.REVIEWED;
 
   // Track previous caseData to avoid unnecessary updates
@@ -268,7 +279,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     // Only sync formData from caseData when:
     // 1. Not in editing mode (to avoid overwriting user edits)
     // 2. caseData actually changed (not just a reference change)
-    const caseDataChanged = 
+    const caseDataChanged =
       prevCaseDataRef.current.patientName !== caseData.patientName ||
       prevCaseDataRef.current.mrn !== caseData.mrn ||
       prevCaseDataRef.current.age !== caseData.age ||
@@ -277,26 +288,26 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       prevCaseDataRef.current.treatmentPlan !== caseData.treatmentPlan ||
       prevCaseDataRef.current.question !== caseData.question ||
       JSON.stringify(prevCaseDataRef.current.concernedDepartmentIds || []) !==
-        JSON.stringify(caseData.concernedDepartmentIds || []);
-    
+      JSON.stringify(caseData.concernedDepartmentIds || []);
+
     if (!isEditing && caseDataChanged) {
-    setFormData({
-      patientName: caseData.patientName,
-      mrn: caseData.mrn || "",
-      age: caseData.age.toString(),
-      gender: caseData.gender,
-      diagnosisStage: caseData.diagnosisStage,
-      treatmentPlan: caseData.treatmentPlan,
-      question: caseData.question,
-      concernedDepartmentIds: Array.isArray(caseData.concernedDepartmentIds)
-        ? caseData.concernedDepartmentIds
-        : [],
-    });
+      setFormData({
+        patientName: caseData.patientName,
+        mrn: caseData.mrn || "",
+        age: caseData.age.toString(),
+        gender: caseData.gender,
+        diagnosisStage: caseData.diagnosisStage,
+        treatmentPlan: caseData.treatmentPlan,
+        question: caseData.question,
+        concernedDepartmentIds: Array.isArray(caseData.concernedDepartmentIds)
+          ? caseData.concernedDepartmentIds
+          : [],
+      });
     }
-    
+
     prevCaseDataRef.current = caseData;
   }, [caseData, isEditing]);
-  
+
   // Register formData getter with parent
   useEffect(() => {
     if (onRegisterFormDataGetter) {
@@ -328,7 +339,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           concernedDepartmentIds: Array.from(new Set(formData.concernedDepartmentIds)),
         });
       }, 100);
-      
+
       return () => clearTimeout(timeoutId);
     }
   }, [formData, isEditing, onFormDataChange]);
@@ -339,13 +350,13 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       const response = await fetch("/api/meetings");
       if (response.ok) {
         const meetings = await response.json();
-        
+
         let filteredMeetings = meetings;
         // First, filter out cancelled and completed meetings
-        filteredMeetings = meetings.filter((m: { date: string; status?: string }) => 
+        filteredMeetings = meetings.filter((m: { date: string; status?: string }) =>
           m.status !== "CANCELLED" && m.status !== "COMPLETED"
         );
-        
+
         if (!includePast) {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
@@ -356,17 +367,17 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
             return meetingDate >= today;
           });
         }
-        
+
         // Sort by date (ascending - earliest first)
-        const sorted = filteredMeetings.sort((a: { date: string }, b: { date: string }) => 
+        const sorted = filteredMeetings.sort((a: { date: string }, b: { date: string }) =>
           new Date(a.date).getTime() - new Date(b.date).getTime()
         );
-        
+
         // Limit to specified number (default: no limit)
         const limited = limit ? sorted.slice(0, limit) : sorted;
-        
+
         setUpcomingMeetings(limited);
-        
+
         // Auto-select the first (nearest) upcoming meeting if available
         if (limited.length > 0) {
           const firstMeetingId = limited[0].id;
@@ -495,7 +506,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       const response = await fetch("/api/meetings");
       if (response.ok) {
         const meetings = await response.json();
-        
+
         // Filter meetings that are today or in the future
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -505,12 +516,12 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           // Exclude cancelled, completed meetings and the currently assigned meeting
           return m.status !== "CANCELLED" && m.status !== "COMPLETED" && meetingDate >= today && m.id !== excludeMeetingId;
         });
-        
+
         // Sort by date (ascending - earliest first)
-        const sorted = filteredMeetings.sort((a: { date: string }, b: { date: string }) => 
+        const sorted = filteredMeetings.sort((a: { date: string }, b: { date: string }) =>
           new Date(a.date).getTime() - new Date(b.date).getTime()
         );
-        
+
         setUpcomingMeetings(sorted);
       }
     } catch (error) {
@@ -624,7 +635,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     setIsLateSubmitWarningOpen(false);
     setSubmitting(true);
     setIsSubmitDialogOpen(false);
-    
+
     try {
       const response = await fetch(`/api/cases/${caseData.id}/submit`, {
         method: "POST",
@@ -635,7 +646,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
           assignedMeetingId: selectedMeetingId,
         }),
       });
-      
+
       if (response.ok) {
         onStatusChange?.();
       } else {
@@ -700,7 +711,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       const response = await fetch(`/api/cases/${caseData.id}`, {
         method: "DELETE",
       });
-      
+
       if (response.ok) {
         // Redirect to cases list after successful deletion
         router.push("/cases");
@@ -759,31 +770,81 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     }
   };
 
+  const resetPdfPreview = () => {
+    setPdfPreviewUrl(null);
+    setPdfPreviewError(null);
+  };
+
   const handlePdfSectionToggle = (section: keyof typeof pdfSections) => {
+    resetPdfPreview();
     setPdfSections((prev) => ({
       ...prev,
       [section]: !prev[section],
     }));
   };
 
+  const handlePdfAttendeeToggle = (attendeeId: string, checked: boolean) => {
+    resetPdfPreview();
+    setSelectedAttendeeIds((prev) =>
+      checked
+        ? prev.includes(attendeeId) ? prev : [...prev, attendeeId]
+        : prev.filter((id) => id !== attendeeId)
+    );
+  };
+
+  const buildPdfQueryParams = () => {
+    const selectedSections = Object.entries(pdfSections)
+      .filter(([_, selected]) => selected)
+      .map(([section, _]) => section);
+
+    const params = new URLSearchParams();
+    selectedSections.forEach((section) => {
+      params.append("sections", section);
+    });
+
+    selectedAttendeeIds.forEach((id) => {
+      params.append("attendeeIds", id);
+    });
+
+    return params;
+  };
+
+  const handlePdfDialogOpenChange = (open: boolean) => {
+    setPdfDialogOpen(open);
+    if (!open) {
+      setPdfPreviewUrl(null);
+      setPdfPreviewError(null);
+      setPreviewingPdf(false);
+    }
+  };
+
+  const handlePreviewPdf = async () => {
+    setPreviewingPdf(true);
+    setPdfPreviewError(null);
+
+    try {
+      const params = buildPdfQueryParams();
+      const response = await fetch(`/api/consensus/${caseData.id}/pdf?${params.toString()}`);
+
+      if (response.ok) {
+        const blob = await response.blob();
+        setPdfPreviewUrl(window.URL.createObjectURL(blob));
+      } else {
+        const error = await response.json();
+        setPdfPreviewError(error.error || "Failed to generate PDF preview");
+      }
+    } catch (error) {
+      console.error("Error previewing PDF:", error);
+      setPdfPreviewError("An error occurred while generating the PDF preview.");
+    } finally {
+      setPreviewingPdf(false);
+    }
+  };
+
   const handleGeneratePdf = async () => {
     setDownloadingPdf(true);
     try {
-      // Convert sections object to array of selected sections
-      const selectedSections = Object.entries(pdfSections)
-        .filter(([_, selected]) => selected)
-        .map(([section, _]) => section);
-
-      // Build query string with sections
-      const params = new URLSearchParams();
-      selectedSections.forEach((section) => {
-        params.append("sections", section);
-      });
-
-      // Add selected attendee IDs
-      selectedAttendeeIds.forEach((id) => {
-        params.append("attendeeIds", id);
-      });
+      const params = buildPdfQueryParams();
 
       const response = await fetch(`/api/consensus/${caseData.id}/pdf?${params.toString()}`);
       if (response.ok) {
@@ -796,7 +857,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        setPdfDialogOpen(false);
+        handlePdfDialogOpenChange(false);
       } else {
         const error = await response.json();
         setMessageDialog({
@@ -822,7 +883,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   const handleResubmit = async () => {
     setSubmitting(true);
     setIsResubmitDialogOpen(false);
-    
+
     try {
       const body: { assignedMeetingId?: string } = {};
       if (selectedResubmitMeetingId && selectedResubmitMeetingId !== "none") {
@@ -874,62 +935,62 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       question: formData.question.trim(),
       concernedDepartmentIds: uniqueConcernedDepartmentIds,
     };
-    
+
     if (onFormDataChange) {
       // Sync immediately before save
       onFormDataChange(currentFormData);
     }
-    
+
     if (externalOnSave) {
       // Pass current formData to ensure latest changes are saved
       await externalOnSave(currentFormData);
     } else {
       // Internal save handler
-    setSaving(true);
-    try {
-      const response = await fetch(`/api/cases/${caseData.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          patientName: formData.patientName.trim(),
-          mrn: formData.mrn.trim() || null,
-          age: parseInt(formData.age),
-          gender: formData.gender,
-          diagnosisStage: formData.diagnosisStage.trim(),
-          treatmentPlan: formData.treatmentPlan.trim(),
-          question: formData.question.trim(),
-          concernedDepartmentIds: uniqueConcernedDepartmentIds,
-        }),
-      });
+      setSaving(true);
+      try {
+        const response = await fetch(`/api/cases/${caseData.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            patientName: formData.patientName.trim(),
+            mrn: formData.mrn.trim() || null,
+            age: parseInt(formData.age),
+            gender: formData.gender,
+            diagnosisStage: formData.diagnosisStage.trim(),
+            treatmentPlan: formData.treatmentPlan.trim(),
+            question: formData.question.trim(),
+            concernedDepartmentIds: uniqueConcernedDepartmentIds,
+          }),
+        });
 
-      if (response.ok) {
-        setIsEditing(false);
-        onStatusChange?.();
-      } else {
-        const error = await response.json();
+        if (response.ok) {
+          setIsEditing(false);
+          onStatusChange?.();
+        } else {
+          const error = await response.json();
+          setMessageDialog({
+            open: true,
+            type: "error",
+            title: "Save Failed",
+            message: error.error || "Failed to save changes",
+          });
+        }
+      } catch (error) {
+        console.error("Error saving case:", error);
         setMessageDialog({
           open: true,
           type: "error",
-          title: "Save Failed",
-          message: error.error || "Failed to save changes",
+          title: "Error",
+          message: "An error occurred. Please try again.",
         });
-      }
-    } catch (error) {
-      console.error("Error saving case:", error);
-      setMessageDialog({
-        open: true,
-        type: "error",
-        title: "Error",
-        message: "An error occurred. Please try again.",
-      });
-    } finally {
-      setSaving(false);
+      } finally {
+        setSaving(false);
       }
     }
   };
-  
+
   const isSaving = externalSaving !== undefined ? externalSaving : saving;
   const selectedConcernedDepartmentIds = Array.isArray(caseData.concernedDepartmentIds)
     ? caseData.concernedDepartmentIds
@@ -972,21 +1033,21 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
 
   // If compactMode, only show action buttons
   if (compactMode) {
-  return (
+    return (
       <div className="flex items-center gap-2">
-          {canEdit && !isEditing && (
+        {canEdit && !isEditing && (
           <Button onClick={() => setIsEditing(true)} variant="outline" size="sm">
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
-          )}
-          {isEditing && (
-            <>
+            <Edit className="mr-2 h-4 w-4" />
+            Edit
+          </Button>
+        )}
+        {isEditing && (
+          <>
             <Button onClick={handleCancel} variant="outline" size="sm" disabled={isSaving}>
-                <X className="mr-2 h-4 w-4" />
-                Cancel
-              </Button>
-            <Button 
+              <X className="mr-2 h-4 w-4" />
+              Cancel
+            </Button>
+            <Button
               onClick={async () => {
                 // For compactMode, we don't render the form, so we can't sync formData from here
                 // Instead, rely on the parent's caseFormData which has been updated by the actual form instances
@@ -997,65 +1058,70 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                 } else {
                   await handleSave();
                 }
-              }} 
-              size="sm" 
+              }}
+              size="sm"
               disabled={isSaving}
             >
               {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {externalSaveStatus || "Saving..."}
-                  </>
-                ) : (
-                  <>
-                    <Save className="mr-2 h-4 w-4" />
-                    Save
-                  </>
-                )}
-              </Button>
-            </>
-          )}
-          {canSubmit && !isEditing && (
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save
+                </>
+              )}
+            </Button>
+          </>
+        )}
+        {canSubmit && !isEditing && (
           <Button onClick={handleSubmitClick} size="sm" disabled={submitting}>
-              <Send className="mr-2 h-4 w-4" />
-              Submit
-            </Button>
-          )}
-          {canResubmit && !isEditing && (
+            <Send className="mr-2 h-4 w-4" />
+            Submit
+          </Button>
+        )}
+        {canResubmit && !isEditing && (
           <Button onClick={handleResubmitClick} size="sm" disabled={submitting} variant="outline">
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Resubmit
-            </Button>
-          )}
-          {canArchive && !isEditing && (
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Resubmit
+          </Button>
+        )}
+        {canArchive && !isEditing && (
           <Button onClick={handleArchive} size="sm" disabled={submitting} variant="outline">
-              <Archive className="mr-2 h-4 w-4" />
-              Archive
-            </Button>
-          )}
-          {canGeneratePdf && !isEditing && (
-          <Button onClick={handleGeneratePdfClick} size="sm" disabled={downloadingPdf} variant="outline">
-              <FileText className="mr-2 h-4 w-4" />
-              Consensus PDF Report
-            </Button>
-          )}
-          {canPresent && !isEditing && (
-            <Button onClick={onPresent} size="sm" variant="outline">
-              <MonitorPlay className="mr-2 h-4 w-4" />
-              Presentation Mode
-            </Button>
-          )}
-          {canDelete && !isEditing && (
-            <Button 
-              onClick={() => setIsDeleteDialogOpen(true)} 
+            <Archive className="mr-2 h-4 w-4" />
+            Archive
+          </Button>
+        )}
+        {canGeneratePdf && !isEditing && (
+          <Button
+            onClick={handleGeneratePdfClick}
             size="sm"
-              disabled={deleting} 
-              variant="destructive"
-            >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Delete
-            </Button>
-          )}
+            disabled={downloadingPdf}
+            className="bg-rose-900 text-white hover:bg-rose-800"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Consensus PDF Report
+          </Button>
+        )}
+        {canPresent && !isEditing && (
+          <Button onClick={onPresent} size="sm" variant="outline">
+            <MonitorPlay className="mr-2 h-4 w-4" />
+            Presentation Mode
+          </Button>
+        )}
+        {canDelete && !isEditing && (
+          <Button
+            onClick={() => setIsDeleteDialogOpen(true)}
+            size="sm"
+            disabled={deleting}
+            variant="destructive"
+          >
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </Button>
+        )}
         {/* Delete Confirmation Dialog */}
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <AlertDialogContent>
@@ -1087,7 +1153,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-        
+
         {/* Submit Dialog */}
         <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
           <DialogContent>
@@ -1097,11 +1163,11 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                 Select a meeting date for this case.
               </DialogDescription>
             </DialogHeader>
-            
+
             {loadingMeetings ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
-        </div>
+              </div>
             ) : (
               <div className="py-4">
                 {upcomingMeetings.length === 0 ? (
@@ -1139,8 +1205,8 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                     ))}
                   </RadioGroup>
                 )}
-      </div>
-      )}
+              </div>
+            )}
 
             <DialogFooter>
               <Button
@@ -1150,26 +1216,26 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
               >
                 Cancel
               </Button>
-            <Button 
-              onClick={handleSubmit} 
-              disabled={submitting || loadingMeetings || !selectedMeetingId || selectedMeetingId === "none" || upcomingMeetings.length === 0}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Submit Case
-                </>
-              )}
-            </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={submitting || loadingMeetings || !selectedMeetingId || selectedMeetingId === "none" || upcomingMeetings.length === 0}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Submit Case
+                  </>
+                )}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
+
         {/* Late Submission Warning Dialog */}
         <AlertDialog open={isLateSubmitWarningOpen} onOpenChange={setIsLateSubmitWarningOpen}>
           <AlertDialogContent>
@@ -1204,7 +1270,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                 Select a meeting date for this case.
               </DialogDescription>
             </DialogHeader>
-            
+
             {loadingMeetings ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin" />
@@ -1248,7 +1314,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                 )}
               </div>
             )}
-            
+
             <DialogFooter>
               <Button
                 variant="outline"
@@ -1257,8 +1323,8 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
               >
                 Cancel
               </Button>
-              <Button 
-                onClick={handleResubmit} 
+              <Button
+                onClick={handleResubmit}
                 disabled={submitting || loadingMeetings || !selectedResubmitMeetingId || selectedResubmitMeetingId === "none" || upcomingMeetings.length === 0}
               >
                 {submitting ? (
@@ -1278,196 +1344,235 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
         </Dialog>
 
         {/* PDF Generation Dialog */}
-        <Dialog open={pdfDialogOpen} onOpenChange={setPdfDialogOpen}>
-          <DialogContent className="max-w-md">
+        <Dialog open={pdfDialogOpen} onOpenChange={handlePdfDialogOpenChange}>
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-[1100px] max-h-[90vh] overflow-hidden">
             <DialogHeader>
               <DialogTitle>Generate PDF Report</DialogTitle>
               <DialogDescription>
                 Select the sections you want to include in the PDF report.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3 py-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="hospitalHeader"
-                  checked={pdfSections.hospitalHeader}
-                  onCheckedChange={() => handlePdfSectionToggle("hospitalHeader")}
-                />
-                <Label htmlFor="hospitalHeader" className="cursor-pointer">
-                  Hospital Name/Logo
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="patientDetails"
-                  checked={pdfSections.patientDetails}
-                  onCheckedChange={() => handlePdfSectionToggle("patientDetails")}
-                />
-                <Label htmlFor="patientDetails" className="cursor-pointer">
-                  Patient Details
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="clinicalDetails"
-                  checked={pdfSections.clinicalDetails}
-                  onCheckedChange={() => handlePdfSectionToggle("clinicalDetails")}
-                />
-                <Label htmlFor="clinicalDetails" className="cursor-pointer">
-                  Clinical Details
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="radiologyFindings"
-                  checked={pdfSections.radiologyFindings}
-                  onCheckedChange={() => handlePdfSectionToggle("radiologyFindings")}
-                />
-                <Label htmlFor="radiologyFindings" className="cursor-pointer">
-                  Radiology Findings
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="pathologyFindings"
-                  checked={pdfSections.pathologyFindings}
-                  onCheckedChange={() => handlePdfSectionToggle("pathologyFindings")}
-                />
-                <Label htmlFor="pathologyFindings" className="cursor-pointer">
-                  Pathology Findings
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="diagnosisStage"
-                  checked={pdfSections.diagnosisStage}
-                  onCheckedChange={() => handlePdfSectionToggle("diagnosisStage")}
-                />
-                <Label htmlFor="diagnosisStage" className="cursor-pointer">
-                  Diagnosis Stage
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="finalDiagnosis"
-                  checked={pdfSections.finalDiagnosis}
-                  onCheckedChange={() => handlePdfSectionToggle("finalDiagnosis")}
-                />
-                <Label htmlFor="finalDiagnosis" className="cursor-pointer">
-                  Final Diagnosis
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="treatmentPlan"
-                  checked={pdfSections.treatmentPlan}
-                  onCheckedChange={() => handlePdfSectionToggle("treatmentPlan")}
-                />
-                <Label htmlFor="treatmentPlan" className="cursor-pointer">
-                  Treatment Plan
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="specialistsOpinions"
-                  checked={pdfSections.specialistsOpinions}
-                  onCheckedChange={() => handlePdfSectionToggle("specialistsOpinions")}
-                />
-                <Label htmlFor="specialistsOpinions" className="cursor-pointer">
-                  Specialists&apos; Opinions
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="question"
-                  checked={pdfSections.question}
-                  onCheckedChange={() => handlePdfSectionToggle("question")}
-                />
-                <Label htmlFor="question" className="cursor-pointer">
-                  Discussion Question
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="consensusReport"
-                  checked={pdfSections.consensusReport}
-                  onCheckedChange={() => handlePdfSectionToggle("consensusReport")}
-                />
-                <Label htmlFor="consensusReport" className="cursor-pointer">
-                  Consensus Report
-                </Label>
-              </div>
-            </div>
-            
-            {/* Attendee Selection Section */}
-            {caseData.assignedMeeting && (
-              <div className="space-y-3 border-t pt-4">
-                <div>
-                  <Label className="text-sm font-medium">Meeting Attendees</Label>
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Select attendees to include in the PDF. Attendees with authenticated digital signatures will show their signatures. Others will show a blank space for physical signature.
-                  </p>
-                </div>
-                {loadingAttendees ? (
-                  <div className="flex items-center justify-center p-4">
-                    <Loader2 className="h-5 w-5 animate-spin" />
+            <div className="grid gap-4 py-4 lg:grid-cols-[minmax(280px,380px)_1fr]">
+              <div className="space-y-4 max-h-[68vh] overflow-y-auto pr-1">
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="hospitalHeader"
+                      checked={pdfSections.hospitalHeader}
+                      onCheckedChange={() => handlePdfSectionToggle("hospitalHeader")}
+                    />
+                    <Label htmlFor="hospitalHeader" className="cursor-pointer">
+                      Hospital Name/Logo
+                    </Label>
                   </div>
-                ) : attendees.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No attendees found for this meeting.
-                  </p>
-                ) : (
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto">
-                    {attendees.map((attendee) => {
-                      const hasSignature = attendee.user.signatureUrl && attendee.user.signatureAuthenticated;
-                      return (
-                        <div
-                          key={attendee.user.id}
-                          className="flex items-center space-x-2 p-2 rounded border"
-                        >
-                          <Checkbox
-                            id={`pdf-attendee-${attendee.user.id}`}
-                            checked={selectedAttendeeIds.includes(attendee.user.id)}
-                            onCheckedChange={(checked) => {
-                              if (checked) {
-                                setSelectedAttendeeIds([...selectedAttendeeIds, attendee.user.id]);
-                              } else {
-                                setSelectedAttendeeIds(
-                                  selectedAttendeeIds.filter((id) => id !== attendee.user.id)
-                                );
-                              }
-                            }}
-                          />
-                          <Label
-                            htmlFor={`pdf-attendee-${attendee.user.id}`}
-                            className="flex-1 cursor-pointer"
-                          >
-                            <div className="flex items-center gap-2">
-                              <div className="font-medium text-sm">{attendee.user.name}</div>
-                              {hasSignature ? (
-                                <span className="text-xs text-green-600">✓ Digital Signature</span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">(Physical Signature)</span>
-                              )}
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="patientDetails"
+                      checked={pdfSections.patientDetails}
+                      onCheckedChange={() => handlePdfSectionToggle("patientDetails")}
+                    />
+                    <Label htmlFor="patientDetails" className="cursor-pointer">
+                      Patient Details
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="clinicalDetails"
+                      checked={pdfSections.clinicalDetails}
+                      onCheckedChange={() => handlePdfSectionToggle("clinicalDetails")}
+                    />
+                    <Label htmlFor="clinicalDetails" className="cursor-pointer">
+                      Clinical Details
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="radiologyFindings"
+                      checked={pdfSections.radiologyFindings}
+                      onCheckedChange={() => handlePdfSectionToggle("radiologyFindings")}
+                    />
+                    <Label htmlFor="radiologyFindings" className="cursor-pointer">
+                      Radiology Findings
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="pathologyFindings"
+                      checked={pdfSections.pathologyFindings}
+                      onCheckedChange={() => handlePdfSectionToggle("pathologyFindings")}
+                    />
+                    <Label htmlFor="pathologyFindings" className="cursor-pointer">
+                      Pathology Findings
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="diagnosisStage"
+                      checked={pdfSections.diagnosisStage}
+                      onCheckedChange={() => handlePdfSectionToggle("diagnosisStage")}
+                    />
+                    <Label htmlFor="diagnosisStage" className="cursor-pointer">
+                      Diagnosis Stage
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="finalDiagnosis"
+                      checked={pdfSections.finalDiagnosis}
+                      onCheckedChange={() => handlePdfSectionToggle("finalDiagnosis")}
+                    />
+                    <Label htmlFor="finalDiagnosis" className="cursor-pointer">
+                      Final Diagnosis
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="treatmentPlan"
+                      checked={pdfSections.treatmentPlan}
+                      onCheckedChange={() => handlePdfSectionToggle("treatmentPlan")}
+                    />
+                    <Label htmlFor="treatmentPlan" className="cursor-pointer">
+                      Treatment Plan
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="specialistsOpinions"
+                      checked={pdfSections.specialistsOpinions}
+                      onCheckedChange={() => handlePdfSectionToggle("specialistsOpinions")}
+                    />
+                    <Label htmlFor="specialistsOpinions" className="cursor-pointer">
+                      Specialists&apos; Opinions
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="question"
+                      checked={pdfSections.question}
+                      onCheckedChange={() => handlePdfSectionToggle("question")}
+                    />
+                    <Label htmlFor="question" className="cursor-pointer">
+                      Discussion Question
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="consensusReport"
+                      checked={pdfSections.consensusReport}
+                      onCheckedChange={() => handlePdfSectionToggle("consensusReport")}
+                    />
+                    <Label htmlFor="consensusReport" className="cursor-pointer">
+                      Consensus Report
+                    </Label>
+                  </div>
+                </div>
+
+                {/* Attendee Selection Section */}
+                {caseData.assignedMeeting && (
+                  <div className="space-y-3 border-t pt-4">
+                    <div>
+                      <Label className="text-sm font-medium">Meeting Attendees</Label>
+                      <p className="text-xs text-muted-foreground mb-3">
+                        Select attendees to include in the PDF. Attendees with authenticated digital signatures will show their signatures. Others will show a blank space for physical signature.
+                      </p>
+                    </div>
+                    {loadingAttendees ? (
+                      <div className="flex items-center justify-center p-4">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      </div>
+                    ) : attendees.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        No attendees found for this meeting.
+                      </p>
+                    ) : (
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                        {attendees.map((attendee) => {
+                          const hasSignature = attendee.user.signatureUrl && attendee.user.signatureAuthenticated;
+                          return (
+                            <div
+                              key={attendee.user.id}
+                              className="flex items-center space-x-2 p-2 rounded border"
+                            >
+                              <Checkbox
+                                id={`pdf-attendee-${attendee.user.id}`}
+                                checked={selectedAttendeeIds.includes(attendee.user.id)}
+                                onCheckedChange={(checked) => {
+                                  handlePdfAttendeeToggle(attendee.user.id, Boolean(checked));
+                                }}
+                              />
+                              <Label
+                                htmlFor={`pdf-attendee-${attendee.user.id}`}
+                                className="flex-1 cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div className="font-medium text-sm">{attendee.user.name}</div>
+                                  {hasSignature ? (
+                                    <span className="text-xs text-green-600">✓ Digital Signature</span>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">(Physical Signature)</span>
+                                  )}
+                                </div>
+                                {attendee.user.department && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {attendee.user.department.name}
+                                  </div>
+                                )}
+                              </Label>
                             </div>
-                            {attendee.user.department && (
-                              <div className="text-xs text-muted-foreground">
-                                {attendee.user.department.name}
-                              </div>
-                            )}
-                          </Label>
-                        </div>
-                      );
-                    })}
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            )}
+
+              <div className="min-h-[520px] rounded-md border bg-muted/20 p-3">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <Label className="text-sm font-medium">PDF Preview</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handlePreviewPdf}
+                    disabled={previewingPdf || downloadingPdf}
+                  >
+                    {previewingPdf ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Previewing...
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="mr-2 h-4 w-4" />
+                        Preview
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {previewingPdf ? (
+                  <div className="flex h-[470px] items-center justify-center rounded border bg-background">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                  </div>
+                ) : pdfPreviewUrl ? (
+                  <iframe
+                    title="Consensus PDF preview"
+                    src={pdfPreviewUrl}
+                    className="h-[470px] w-full rounded border bg-background"
+                  />
+                ) : (
+                  <div className="flex h-[470px] items-center justify-center rounded border bg-background p-6 text-center text-sm text-muted-foreground">
+                    {pdfPreviewError || "Choose sections and attendees, then click Preview."}
+                  </div>
+                )}
+              </div>
+            </div>
 
             <DialogFooter>
               <Button
                 variant="outline"
-                onClick={() => setPdfDialogOpen(false)}
+                onClick={() => handlePdfDialogOpenChange(false)}
                 disabled={downloadingPdf}
               >
                 Cancel
@@ -1496,48 +1601,48 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
   if (showMeetingOnly) {
     // For SUBMITTED or PENDING status cases, use the re-assign/remove dialog
     const shouldUseReassignDialog = (caseData.status === CaseStatus.SUBMITTED || caseData.status === CaseStatus.PENDING) && hasAssignedMeeting;
-    
+
     return (
       <>
-      <div className="flex items-center gap-2">
-        {hasAssignedMeeting && caseData.assignedMeeting ? (
-          <>
-              <Link 
-                href={`/register?meetingId=${caseData.assignedMeeting.id}`} 
+        <div className="flex items-center gap-2">
+          {hasAssignedMeeting && caseData.assignedMeeting ? (
+            <>
+              <Link
+                href={`/register?meetingId=${caseData.assignedMeeting.id}`}
                 className="inline-flex items-center gap-1"
               >
-                <Badge 
-                  variant="secondary" 
+                <Badge
+                  variant="secondary"
                   className="text-sm cursor-pointer hover:bg-secondary/80 transition-colors whitespace-nowrap"
                 >
                   <Calendar className="h-3 w-3 flex-shrink-0" />
                   {format(new Date(caseData.assignedMeeting.date), "MMM dd, yyyy")}
                 </Badge>
               </Link>
-            {canUnassignMeeting && (
-              <Button
-                variant="ghost"
-                size="sm"
+              {canUnassignMeeting && (
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={(e) => {
                     e.stopPropagation();
                     shouldUseReassignDialog ? handleReassignRemoveClick() : handleUnassignMeeting();
                   }}
                   disabled={unassigningMeeting || reassigningMeeting}
-                className="h-6 px-2 text-xs"
-              >
+                  className="h-6 px-2 text-xs"
+                >
                   {(unassigningMeeting || reassigningMeeting) ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <X className="h-3 w-3" />
-                )}
-              </Button>
-            )}
-          </>
-        ) : (
-          <Badge variant="outline" className="text-sm">No meeting assigned</Badge>
-        )}
-      </div>
-        
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <X className="h-3 w-3" />
+                  )}
+                </Button>
+              )}
+            </>
+          ) : (
+            <Badge variant="outline" className="text-sm">No meeting assigned</Badge>
+          )}
+        </div>
+
         {/* Re-assign / Remove Dialog - for SUBMITTED status cases */}
         {shouldUseReassignDialog && (
           <Dialog open={isReassignRemoveDialogOpen} onOpenChange={setIsReassignRemoveDialogOpen}>
@@ -1548,7 +1653,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                   Remove this case from the current meeting or reassign it to an upcoming meeting.
                 </DialogDescription>
               </DialogHeader>
-              
+
               {loadingMeetings ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin" />
@@ -1565,7 +1670,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                         Remove from meeting
                       </Label>
                     </div>
-                    
+
                     {upcomingMeetings.map((meeting) => (
                       <div key={meeting.id} className="flex items-center space-x-2 py-2">
                         <RadioGroupItem value={meeting.id} id={`reassign-${meeting.id}`} />
@@ -1584,7 +1689,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                       </div>
                     ))}
                   </RadioGroup>
-                  
+
                   {upcomingMeetings.length === 0 && (
                     <p className="text-sm text-muted-foreground py-4">
                       No upcoming meetings found. You can remove the case from the current meeting.
@@ -1592,7 +1697,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                   )}
                 </div>
               )}
-              
+
               <DialogFooter>
                 <Button
                   variant="outline"
@@ -1601,8 +1706,8 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                 >
                   Cancel
                 </Button>
-                <Button 
-                  onClick={handleReassignRemove} 
+                <Button
+                  onClick={handleReassignRemove}
                   disabled={reassigningMeeting || loadingMeetings || !selectedReassignMeetingId}
                 >
                   {reassigningMeeting ? (
@@ -1627,124 +1732,124 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
       {/* Delete Confirmation Dialog - only show once */}
       {(showUpToPatientInfo === true || showUpToPatientInfo === undefined) && (
         <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Case</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete this case? This action cannot be undone.
-              <br />
-              <strong>Patient: {caseData.patientName}</strong>
-              {caseData.mrn && <><br />MRN: {caseData.mrn}</>}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Case</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this case? This action cannot be undone.
+                <br />
+                <strong>Patient: {caseData.patientName}</strong>
+                {caseData.mrn && <><br />MRN: {caseData.mrn}</>}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       )}
 
       {/* Patient Information - only show when showUpToPatientInfo is true or undefined and not in compact mode */}
       {(showUpToPatientInfo === true || showUpToPatientInfo === undefined) && !compactMode && (
         <Card>
-        <CardHeader className="pt-3 pb-2">
-          <CardTitle>Patient Information</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2 pb-3">
-          {isEditing ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="patientName">Patient Name *</Label>
-                <Input
-                  id="patientName"
-                  value={formData.patientName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, patientName: e.target.value })
-                  }
-                  disabled={isSaving}
-                />
+          <CardHeader className="pt-3 pb-2">
+            <CardTitle>Patient Information</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-2 pb-3">
+            {isEditing ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="patientName">Patient Name *</Label>
+                  <Input
+                    id="patientName"
+                    value={formData.patientName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, patientName: e.target.value })
+                    }
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mrn">MRN</Label>
+                  <Input
+                    id="mrn"
+                    value={formData.mrn}
+                    onChange={(e) =>
+                      setFormData({ ...formData, mrn: e.target.value })
+                    }
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="age">Age *</Label>
+                  <Input
+                    id="age"
+                    type="number"
+                    min="0"
+                    max="150"
+                    value={formData.age}
+                    onChange={(e) =>
+                      setFormData({ ...formData, age: e.target.value })
+                    }
+                    disabled={isSaving}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="gender">Gender *</Label>
+                  <Select
+                    value={formData.gender}
+                    onValueChange={(value: Gender) =>
+                      setFormData({ ...formData, gender: value })
+                    }
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={Gender.Male}>Male</SelectItem>
+                      <SelectItem value={Gender.Female}>Female</SelectItem>
+                      <SelectItem value={Gender.Other}>Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="mrn">MRN</Label>
-                <Input
-                  id="mrn"
-                  value={formData.mrn}
-                  onChange={(e) =>
-                    setFormData({ ...formData, mrn: e.target.value })
-                  }
-                  disabled={isSaving}
-                />
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground">Age</p>
+                  <p className="font-medium">{caseData.age}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Gender</p>
+                  <p className="font-medium">{caseData.gender}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Department</p>
+                  <p className="font-medium">{caseData.presentingDepartment.name}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Created By</p>
+                  <p className="font-medium">{caseData.createdBy.name}</p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="age">Age *</Label>
-                <Input
-                  id="age"
-                  type="number"
-                  min="0"
-                  max="150"
-                  value={formData.age}
-                  onChange={(e) =>
-                    setFormData({ ...formData, age: e.target.value })
-                  }
-                  disabled={isSaving}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="gender">Gender *</Label>
-                <Select
-                  value={formData.gender}
-                  onValueChange={(value: Gender) =>
-                    setFormData({ ...formData, gender: value })
-                  }
-                  disabled={isSaving}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={Gender.Male}>Male</SelectItem>
-                    <SelectItem value={Gender.Female}>Female</SelectItem>
-                    <SelectItem value={Gender.Other}>Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Age</p>
-                <p className="font-medium">{caseData.age}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Gender</p>
-                <p className="font-medium">{caseData.gender}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Department</p>
-                <p className="font-medium">{caseData.presentingDepartment.name}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Created By</p>
-                <p className="font-medium">{caseData.createdBy.name}</p>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* If showUpToPatientInfo is false, show Diagnosis Stage and other sections */}
@@ -1752,139 +1857,139 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
         <>
           {/* Diagnosis Stage */}
           <Card>
-        <CardHeader className="pt-3 pb-2">
-          <CardTitle>Diagnosis Stage</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2 pb-3">
-          {isEditing ? (
-            <Input
-              value={formData.diagnosisStage}
-              onChange={(e) =>
-                setFormData({ ...formData, diagnosisStage: e.target.value })
-              }
-              disabled={isSaving}
-              placeholder="Enter diagnosis stage..."
-            />
-          ) : (
-            <p className="whitespace-pre-wrap">{caseData.diagnosisStage || "—"}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Treatment Plan */}
-      <Card>
-        <CardHeader className="pt-3 pb-2">
-          <CardTitle>Treatment Plan</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2 pb-3">
-          {isEditing ? (
-            <Textarea
-              value={formData.treatmentPlan}
-              onChange={(e) =>
-                setFormData({ ...formData, treatmentPlan: e.target.value })
-              }
-              rows={4}
-              disabled={isSaving}
-              placeholder="Enter treatment plan..."
-              className="whitespace-pre-wrap"
-            />
-          ) : (
-            <p className="whitespace-pre-wrap">{caseData.treatmentPlan || "—"}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Discussion Question */}
-      <Card>
-        <CardHeader className="pt-3 pb-2">
-          <CardTitle>Discussion Question</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2 pb-3">
-          {isEditing ? (
-            <Textarea
-              value={formData.question}
-              onChange={(e) =>
-                setFormData({ ...formData, question: e.target.value })
-              }
-              rows={3}
-              disabled={isSaving}
-              placeholder="Enter discussion question..."
-              className="whitespace-pre-wrap"
-            />
-          ) : (
-            <p className="whitespace-pre-wrap">{caseData.question || "—"}</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Concerned Departments */}
-      <Card>
-        <CardHeader className="pt-3 pb-2">
-          <CardTitle>Concerned Departments</CardTitle>
-        </CardHeader>
-        <CardContent className="pt-2 pb-3">
-          {isEditing ? (
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Select departments from which expert opinions are needed.
-              </p>
-              {departmentOptions.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No departments available.</p>
+            <CardHeader className="pt-3 pb-2">
+              <CardTitle>Diagnosis Stage</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2 pb-3">
+              {isEditing ? (
+                <Input
+                  value={formData.diagnosisStage}
+                  onChange={(e) =>
+                    setFormData({ ...formData, diagnosisStage: e.target.value })
+                  }
+                  disabled={isSaving}
+                  placeholder="Enter diagnosis stage..."
+                />
               ) : (
-                <div className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                  {departmentOptions.map((department) => {
-                    const checkboxId = `concerned-department-${department.id}`;
-                    return (
-                      <div key={department.id} className="flex items-center space-x-2 min-h-8">
-                        <Checkbox
-                          id={checkboxId}
-                          checked={formData.concernedDepartmentIds.includes(department.id)}
-                          onCheckedChange={(checked) =>
-                            handleConcernedDepartmentToggle(department.id, checked === true)
-                          }
-                          disabled={isSaving}
-                        />
-                        <Label htmlFor={checkboxId} className="cursor-pointer">
-                          {department.name}
-                        </Label>
-                      </div>
-                    );
-                  })}
-                </div>
+                <p className="whitespace-pre-wrap">{caseData.diagnosisStage || "—"}</p>
               )}
-            </div>
-          ) : (
-            <p className="whitespace-pre-wrap">
-              {selectedConcernedDepartmentNames.length > 0
-                ? selectedConcernedDepartmentNames.join(", ")
-                : selectedConcernedDepartmentIds.length > 0
-                ? `${selectedConcernedDepartmentIds.length} department(s) selected`
-                : "—"}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-                    </>
+            </CardContent>
+          </Card>
+
+          {/* Treatment Plan */}
+          <Card>
+            <CardHeader className="pt-3 pb-2">
+              <CardTitle>Treatment Plan</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2 pb-3">
+              {isEditing ? (
+                <Textarea
+                  value={formData.treatmentPlan}
+                  onChange={(e) =>
+                    setFormData({ ...formData, treatmentPlan: e.target.value })
+                  }
+                  rows={4}
+                  disabled={isSaving}
+                  placeholder="Enter treatment plan..."
+                  className="whitespace-pre-wrap"
+                />
+              ) : (
+                <p className="whitespace-pre-wrap">{caseData.treatmentPlan || "—"}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Discussion Question */}
+          <Card>
+            <CardHeader className="pt-3 pb-2">
+              <CardTitle>Discussion Question</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2 pb-3">
+              {isEditing ? (
+                <Textarea
+                  value={formData.question}
+                  onChange={(e) =>
+                    setFormData({ ...formData, question: e.target.value })
+                  }
+                  rows={3}
+                  disabled={isSaving}
+                  placeholder="Enter discussion question..."
+                  className="whitespace-pre-wrap"
+                />
+              ) : (
+                <p className="whitespace-pre-wrap">{caseData.question || "—"}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Concerned Departments */}
+          <Card>
+            <CardHeader className="pt-3 pb-2">
+              <CardTitle>Concerned Departments</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-2 pb-3">
+              {isEditing ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Select departments from which expert opinions are needed.
+                  </p>
+                  {departmentOptions.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No departments available.</p>
+                  ) : (
+                    <div className="rounded-md border p-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                      {departmentOptions.map((department) => {
+                        const checkboxId = `concerned-department-${department.id}`;
+                        return (
+                          <div key={department.id} className="flex items-center space-x-2 min-h-8">
+                            <Checkbox
+                              id={checkboxId}
+                              checked={formData.concernedDepartmentIds.includes(department.id)}
+                              onCheckedChange={(checked) =>
+                                handleConcernedDepartmentToggle(department.id, checked === true)
+                              }
+                              disabled={isSaving}
+                            />
+                            <Label htmlFor={checkboxId} className="cursor-pointer">
+                              {department.name}
+                            </Label>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap">
+                  {selectedConcernedDepartmentNames.length > 0
+                    ? selectedConcernedDepartmentNames.join(", ")
+                    : selectedConcernedDepartmentIds.length > 0
+                      ? `${selectedConcernedDepartmentIds.length} department(s) selected`
+                      : "—"}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
 
       {/* All Dialogs - render for all modes */}
-        <>
-          {/* Submit Dialog */}
-          <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Submit Case</DialogTitle>
-            <DialogDescription>
-              Select a meeting date for this case.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {loadingMeetings ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : (
-            <div className="py-4">
+      <>
+        {/* Submit Dialog */}
+        <Dialog open={isSubmitDialogOpen} onOpenChange={setIsSubmitDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Submit Case</DialogTitle>
+              <DialogDescription>
+                Select a meeting date for this case.
+              </DialogDescription>
+            </DialogHeader>
+
+            {loadingMeetings ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : (
+              <div className="py-4">
                 {upcomingMeetings.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-4 space-y-2">
                     <p>No upcoming meetings found.</p>
@@ -1897,121 +2002,191 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                     </p>
                   </div>
                 ) : (
-              <RadioGroup
-                value={selectedMeetingId}
-                onValueChange={setSelectedMeetingId}
-              >
-                {upcomingMeetings.map((meeting) => (
-                  <div key={meeting.id} className="flex items-center space-x-2 py-2">
-                    <RadioGroupItem value={meeting.id} id={meeting.id} />
-                    <Label htmlFor={meeting.id} className="cursor-pointer flex-1">
-                      <div>
-                        <div className="font-medium">
-                          {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
-                        </div>
-                        {meeting.description && (
-                          <div className="text-sm text-muted-foreground">
-                            {meeting.description}
+                  <RadioGroup
+                    value={selectedMeetingId}
+                    onValueChange={setSelectedMeetingId}
+                  >
+                    {upcomingMeetings.map((meeting) => (
+                      <div key={meeting.id} className="flex items-center space-x-2 py-2">
+                        <RadioGroupItem value={meeting.id} id={meeting.id} />
+                        <Label htmlFor={meeting.id} className="cursor-pointer flex-1">
+                          <div>
+                            <div className="font-medium">
+                              {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
+                            </div>
+                            {meeting.description && (
+                              <div className="text-sm text-muted-foreground">
+                                {meeting.description}
+                              </div>
+                            )}
                           </div>
-                        )}
+                        </Label>
                       </div>
-                    </Label>
+                    ))}
+                  </RadioGroup>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsSubmitDialogOpen(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={submitting || loadingMeetings || !selectedMeetingId || selectedMeetingId === "none" || upcomingMeetings.length === 0}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Submit Case
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Late Submission Warning Dialog */}
+        <AlertDialog open={isLateSubmitWarningOpen} onOpenChange={setIsLateSubmitWarningOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Late Submission</AlertDialogTitle>
+              <AlertDialogDescription>
+                This case is being submitted very close to the meeting. Consultants may not have sufficient time to review the case before the discussion. If this is an urgent or emergency case, you may proceed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel
+                onClick={() => {
+                  setIsLateSubmitWarningOpen(false);
+                  setIsSubmitDialogOpen(true);
+                }}
+              >
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction onClick={confirmSubmit}>
+                Submit Anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Resubmit Dialog */}
+        <Dialog open={isResubmitDialogOpen} onOpenChange={setIsResubmitDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Resubmit Case</DialogTitle>
+              <DialogDescription>
+                Select a meeting date for this case.
+              </DialogDescription>
+            </DialogHeader>
+
+            {loadingMeetings ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : (
+              <div className="py-4">
+                {upcomingMeetings.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 space-y-2">
+                    <p>No upcoming meetings found.</p>
+                    <p>
+                      To request a meeting, go to{" "}
+                      <Link href="/settings?tab=notifications" className="text-primary underline hover:no-underline">
+                        Settings → Notifications → Request meeting
+                      </Link>
+                      .
+                    </p>
                   </div>
-                ))}
-              </RadioGroup>
-              )}
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsSubmitDialogOpen(false)}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleSubmit} 
-              disabled={submitting || loadingMeetings || !selectedMeetingId || selectedMeetingId === "none" || upcomingMeetings.length === 0}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Submit Case
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                ) : (
+                  <RadioGroup
+                    value={selectedResubmitMeetingId}
+                    onValueChange={setSelectedResubmitMeetingId}
+                  >
+                    {upcomingMeetings.map((meeting) => (
+                      <div key={meeting.id} className="flex items-center space-x-2 py-2">
+                        <RadioGroupItem value={meeting.id} id={`resubmit-${meeting.id}`} />
+                        <Label htmlFor={`resubmit-${meeting.id}`} className="cursor-pointer flex-1">
+                          <div>
+                            <div className="font-medium">
+                              {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
+                            </div>
+                            {meeting.description && (
+                              <div className="text-sm text-muted-foreground">
+                                {meeting.description}
+                              </div>
+                            )}
+                          </div>
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                )}
+              </div>
+            )}
 
-      {/* Late Submission Warning Dialog */}
-      <AlertDialog open={isLateSubmitWarningOpen} onOpenChange={setIsLateSubmitWarningOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Late Submission</AlertDialogTitle>
-            <AlertDialogDescription>
-              This case is being submitted very close to the meeting. Consultants may not have sufficient time to review the case before the discussion. If this is an urgent or emergency case, you may proceed.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setIsLateSubmitWarningOpen(false);
-                setIsSubmitDialogOpen(true);
-              }}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={confirmSubmit}>
-              Submit Anyway
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsResubmitDialogOpen(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleResubmit}
+                disabled={submitting || loadingMeetings || !selectedResubmitMeetingId || selectedResubmitMeetingId === "none" || upcomingMeetings.length === 0}
+              >
+                {submitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Resubmitting...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Resubmit Case
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Resubmit Dialog */}
-      <Dialog open={isResubmitDialogOpen} onOpenChange={setIsResubmitDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Resubmit Case</DialogTitle>
-            <DialogDescription>
-              Select a meeting date for this case.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {loadingMeetings ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : (
-            <div className="py-4">
-              {upcomingMeetings.length === 0 ? (
-                <div className="text-sm text-muted-foreground py-4 space-y-2">
-                  <p>No upcoming meetings found.</p>
-                  <p>
-                    To request a meeting, go to{" "}
-                    <Link href="/settings?tab=notifications" className="text-primary underline hover:no-underline">
-                      Settings → Notifications → Request meeting
-                    </Link>
-                    .
-                  </p>
-                </div>
-              ) : (
+        {/* Assign Meeting Dialog */}
+        <Dialog open={isAssignMeetingDialogOpen} onOpenChange={setIsAssignMeetingDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Assign Meeting</DialogTitle>
+              <DialogDescription>
+                Select a meeting to assign this case to.
+              </DialogDescription>
+            </DialogHeader>
+
+            {loadingMeetings ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : (
+              <div className="py-4">
                 <RadioGroup
-                  value={selectedResubmitMeetingId}
-                  onValueChange={setSelectedResubmitMeetingId}
+                  value={selectedMeetingId}
+                  onValueChange={setSelectedMeetingId}
                 >
                   {upcomingMeetings.map((meeting) => (
                     <div key={meeting.id} className="flex items-center space-x-2 py-2">
-                      <RadioGroupItem value={meeting.id} id={`resubmit-${meeting.id}`} />
-                      <Label htmlFor={`resubmit-${meeting.id}`} className="cursor-pointer flex-1">
+                      <RadioGroupItem value={meeting.id} id={`assign-${meeting.id}`} />
+                      <Label htmlFor={`assign-${meeting.id}`} className="cursor-pointer flex-1">
                         <div>
                           <div className="font-medium">
                             {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
@@ -2026,119 +2201,49 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
                     </div>
                   ))}
                 </RadioGroup>
-              )}
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsResubmitDialogOpen(false)}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleResubmit} 
-              disabled={submitting || loadingMeetings || !selectedResubmitMeetingId || selectedResubmitMeetingId === "none" || upcomingMeetings.length === 0}
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Resubmitting...
-                </>
-              ) : (
-                <>
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Resubmit Case
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Assign Meeting Dialog */}
-      <Dialog open={isAssignMeetingDialogOpen} onOpenChange={setIsAssignMeetingDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Assign Meeting</DialogTitle>
-            <DialogDescription>
-              Select a meeting to assign this case to.
-            </DialogDescription>
-          </DialogHeader>
-          
-          {loadingMeetings ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : (
-            <div className="py-4">
-              <RadioGroup
-                value={selectedMeetingId}
-                onValueChange={setSelectedMeetingId}
+                {upcomingMeetings.length === 0 && (
+                  <p className="text-sm text-muted-foreground py-4">
+                    No meetings found.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsAssignMeetingDialogOpen(false)}
+                disabled={assigningMeeting}
               >
-                {upcomingMeetings.map((meeting) => (
-                  <div key={meeting.id} className="flex items-center space-x-2 py-2">
-                    <RadioGroupItem value={meeting.id} id={`assign-${meeting.id}`} />
-                    <Label htmlFor={`assign-${meeting.id}`} className="cursor-pointer flex-1">
-                      <div>
-                        <div className="font-medium">
-                          {format(new Date(meeting.date), "EEEE, MMMM dd, yyyy")}
-                        </div>
-                        {meeting.description && (
-                          <div className="text-sm text-muted-foreground">
-                            {meeting.description}
-                          </div>
-                        )}
-                      </div>
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-              
-              {upcomingMeetings.length === 0 && (
-                <p className="text-sm text-muted-foreground py-4">
-                  No meetings found.
-                </p>
-              )}
-            </div>
-          )}
-          
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsAssignMeetingDialogOpen(false)}
-              disabled={assigningMeeting}
-            >
-              Cancel
-            </Button>
-            <Button 
-              onClick={handleAssignMeeting} 
-              disabled={assigningMeeting || loadingMeetings || selectedMeetingId === "none"}
-            >
-              {assigningMeeting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Assigning...
-                </>
-              ) : (
-                "Assign Meeting"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAssignMeeting}
+                disabled={assigningMeeting || loadingMeetings || selectedMeetingId === "none"}
+              >
+                {assigningMeeting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Assigning...
+                  </>
+                ) : (
+                  "Assign Meeting"
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-      {/* Message Dialog */}
-      <MessageDialog
-        open={messageDialog.open}
-        onOpenChange={(open) => setMessageDialog({ ...messageDialog, open })}
-        type={messageDialog.type}
-        title={messageDialog.title}
-        message={messageDialog.message}
-      />
-        </>
+        {/* Message Dialog */}
+        <MessageDialog
+          open={messageDialog.open}
+          onOpenChange={(open) => setMessageDialog({ ...messageDialog, open })}
+          type={messageDialog.type}
+          title={messageDialog.title}
+          message={messageDialog.message}
+        />
+      </>
     </div>
   );
 }

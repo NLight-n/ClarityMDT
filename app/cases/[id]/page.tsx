@@ -520,7 +520,6 @@ function CaseDetailPageContent() {
         caseId={caseId}
         initialConsensus={caseData.consensusReport || null}
         onSave={loadCase}
-        assignedMeetingId={caseData.assignedMeetingId || null}
       />
 
       <FollowUpEditor

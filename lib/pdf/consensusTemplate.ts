@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { PDFDocument, PDFFont, rgb, StandardFonts } from "pdf-lib";
 import { stripInlineImages } from "./utils";
 
 // Using pdf-lib instead of PDFKit for better Next.js serverless compatibility
@@ -59,6 +59,12 @@ interface AttendeeSignature {
   signatureImage?: Uint8Array; // Image bytes for embedding
 }
 
+interface RichTextSegment {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+}
+
 export async function generateConsensusPDF(
   caseData: CaseData,
   selectedSections: string[] = [
@@ -79,6 +85,8 @@ export async function generateConsensusPDF(
     // Load fonts
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const helveticaBoldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const helveticaObliqueFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+    const helveticaBoldObliqueFont = await pdfDoc.embedFont(StandardFonts.HelveticaBoldOblique);
 
     // Helper function to check if a section should be included
     const includeSection = (sectionName: string) => selectedSections.includes(sectionName);
@@ -162,6 +170,224 @@ export async function generateConsensusPDF(
 
         // Add line break after each paragraph line
         yPosition -= 2;
+      }
+      return yPosition;
+    };
+
+    const getFontForSegment = (segment: RichTextSegment): PDFFont => {
+      if (segment.bold && segment.italic) return helveticaBoldObliqueFont;
+      if (segment.bold) return helveticaBoldFont;
+      if (segment.italic) return helveticaObliqueFont;
+      return helveticaFont;
+    };
+
+    const ensureTextSpace = (spacing: number) => {
+      if (yPosition < margin + 50) {
+        currentPage = pdfDoc.addPage([595, 842]);
+        yPosition = height - margin;
+      }
+    };
+
+    const parseRichContent = (content: any) => {
+      if (!content) return null;
+      if (typeof content === "string") {
+        try {
+          const parsed = JSON.parse(content);
+          return parsed?.type === "doc" ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+      return typeof content === "object" && content.type === "doc" ? content : null;
+    };
+
+    const getPlainText = (content: any): string => {
+      if (!content) return "";
+      if (typeof content === "string") {
+        const richDoc = parseRichContent(content);
+        return richDoc ? stripInlineImages(richDoc) : content;
+      }
+      return stripInlineImages(content);
+    };
+
+    const flattenInlineSegments = (
+      node: any,
+      inherited: Omit<RichTextSegment, "text"> = {}
+    ): RichTextSegment[] => {
+      if (!node) return [];
+      if (node.type === "image") return [];
+      if (node.type === "hardBreak") return [{ text: "\n", ...inherited }];
+
+      const marks = Array.isArray(node.marks) ? node.marks : [];
+      const segmentStyle = {
+        ...inherited,
+        bold: inherited.bold || marks.some((mark: any) => mark.type === "bold"),
+        italic: inherited.italic || marks.some((mark: any) => mark.type === "italic"),
+      };
+
+      if (typeof node.text === "string") {
+        return [{ text: node.text, ...segmentStyle }];
+      }
+
+      if (Array.isArray(node.content)) {
+        return node.content.flatMap((child: any) => flattenInlineSegments(child, segmentStyle));
+      }
+
+      return [];
+    };
+
+    const tokenizeSegments = (segments: RichTextSegment[]): RichTextSegment[] =>
+      segments.flatMap((segment) =>
+        segment.text
+          .split(/(\n|\s+)/)
+          .filter((text) => text.length > 0)
+          .map((text) => ({ ...segment, text }))
+      );
+
+    const drawSegmentLine = (
+      line: RichTextSegment[],
+      x: number,
+      y: number,
+      fontSize: number
+    ) => {
+      let cursorX = x;
+      for (const segment of line) {
+        if (!segment.text) continue;
+        const font = getFontForSegment(segment);
+        currentPage.drawText(segment.text, {
+          x: cursorX,
+          y,
+          size: fontSize,
+          font,
+        });
+        cursorX += font.widthOfTextAtSize(segment.text, fontSize);
+      }
+    };
+
+    const addRichInline = (
+      segments: RichTextSegment[],
+      fontSize: number,
+      indent: number = 0,
+      spacing: number = 12,
+      prefix?: RichTextSegment[]
+    ) => {
+      const x = margin + indent;
+      const lineWidth = maxWidth - indent;
+      const tokens = tokenizeSegments([...(prefix || []), ...segments]);
+      let currentLine: RichTextSegment[] = [];
+      let currentWidth = 0;
+
+      const flushLine = () => {
+        ensureTextSpace(spacing);
+        const trimmed = [...currentLine];
+        while (trimmed.length > 0 && /^\s+$/.test(trimmed[trimmed.length - 1].text)) {
+          trimmed.pop();
+        }
+        if (trimmed.length > 0) {
+          drawSegmentLine(trimmed, x, yPosition, fontSize);
+        }
+        yPosition -= spacing;
+        currentLine = [];
+        currentWidth = 0;
+      };
+
+      for (const token of tokens) {
+        if (token.text === "\n") {
+          flushLine();
+          continue;
+        }
+
+        const font = getFontForSegment(token);
+        const tokenWidth = font.widthOfTextAtSize(token.text, fontSize);
+        const isWhitespace = /^\s+$/.test(token.text);
+
+        if (currentWidth + tokenWidth > lineWidth && currentLine.length > 0 && !isWhitespace) {
+          flushLine();
+        }
+
+        if (currentLine.length === 0 && isWhitespace) continue;
+
+        currentLine.push(token);
+        currentWidth += tokenWidth;
+      }
+
+      if (currentLine.length > 0) {
+        flushLine();
+      }
+
+      yPosition -= 2;
+      return yPosition;
+    };
+
+    const renderRichNode = (
+      node: any,
+      indent: number = 20,
+      listContext?: { type: "bulletList" | "orderedList"; index: number }
+    ) => {
+      if (!node) return;
+
+      if (node.type === "paragraph") {
+        const segments = flattenInlineSegments(node);
+        const prefix = listContext
+          ? [{
+              text: listContext.type === "orderedList" ? `${listContext.index}. ` : "\u2022 ",
+              bold: false,
+            }]
+          : undefined;
+        addRichInline(segments, 11, indent, 12, prefix);
+        return;
+      }
+
+      if (node.type === "heading") {
+        const level = node.attrs?.level || 2;
+        const fontSize = level === 1 ? 14 : level === 2 ? 13 : 12;
+        const segments = flattenInlineSegments(node).map((segment) => ({ ...segment, bold: true }));
+        addRichInline(segments, fontSize, indent, fontSize + 2);
+        yPosition -= 4;
+        return;
+      }
+
+      if (node.type === "bulletList" || node.type === "orderedList") {
+        let itemIndex = node.attrs?.start || 1;
+        for (const item of node.content || []) {
+          renderRichNode(item, indent, { type: node.type, index: itemIndex });
+          itemIndex += 1;
+        }
+        yPosition -= 4;
+        return;
+      }
+
+      if (node.type === "listItem") {
+        const children = node.content || [];
+        let renderedFirstParagraph = false;
+        for (const child of children) {
+          if (!renderedFirstParagraph && child.type === "paragraph") {
+            renderRichNode(child, indent, listContext);
+            renderedFirstParagraph = true;
+          } else {
+            renderRichNode(child, indent + 18);
+          }
+        }
+        return;
+      }
+
+      if (Array.isArray(node.content)) {
+        for (const child of node.content) {
+          renderRichNode(child, indent);
+        }
+      }
+    };
+
+    const addRichText = (content: any, indent: number = 20) => {
+      const richDoc = parseRichContent(content);
+      if (!richDoc) {
+        const plainText = getPlainText(content);
+        if (plainText.trim()) addText(plainText, 11, false, indent, 12);
+        return yPosition;
+      }
+
+      for (const child of richDoc.content || []) {
+        renderRichNode(child, indent);
       }
       return yPosition;
     };
@@ -269,7 +495,7 @@ export async function generateConsensusPDF(
 
     // Final Diagnosis Section
     if (includeSection("finalDiagnosis") && caseData.consensusReport?.finalDiagnosis) {
-      const finalDiagnosisText = stripInlineImages(caseData.consensusReport.finalDiagnosis);
+      const finalDiagnosisText = getPlainText(caseData.consensusReport.finalDiagnosis);
       if (finalDiagnosisText) {
         const titleY = yPosition;
         yPosition = addText("Final Diagnosis", 14, true, 0, 14);
@@ -281,14 +507,14 @@ export async function generateConsensusPDF(
         });
         yPosition -= 10;
 
-        yPosition = addText(finalDiagnosisText, 11, false, 20, 12);
+        yPosition = addRichText(caseData.consensusReport.finalDiagnosis, 20);
         yPosition -= 20;
       }
     }
 
     // Diagnosis Stage
     if (includeSection("diagnosisStage") && caseData.diagnosisStage && !caseData.consensusReport?.finalDiagnosis) {
-      const diagnosisText = stripInlineImages(caseData.diagnosisStage);
+      const diagnosisText = getPlainText(caseData.diagnosisStage);
       if (diagnosisText) {
         const titleY = yPosition;
         yPosition = addText("Diagnosis Stage", 14, true, 0, 14);
@@ -300,14 +526,14 @@ export async function generateConsensusPDF(
         });
         yPosition -= 10;
 
-        yPosition = addText(diagnosisText, 11, false, 20, 12);
+        yPosition = addRichText(caseData.diagnosisStage, 20);
         yPosition -= 20;
       }
     }
 
     // Clinical Details
     if (includeSection("clinicalDetails") && caseData.clinicalDetails) {
-      const clinicalText = stripInlineImages(caseData.clinicalDetails);
+      const clinicalText = getPlainText(caseData.clinicalDetails);
       if (clinicalText) {
         const titleY = yPosition;
         yPosition = addText("Clinical Details", 14, true, 0, 14);
@@ -319,14 +545,14 @@ export async function generateConsensusPDF(
         });
         yPosition -= 10;
 
-        yPosition = addText(clinicalText, 11, false, 20, 12);
+        yPosition = addRichText(caseData.clinicalDetails, 20);
         yPosition -= 20;
       }
     }
 
     // Radiology Findings
     if (includeSection("radiologyFindings")) {
-      const radiologyText = stripInlineImages(caseData.radiologyFindings);
+      const radiologyText = getPlainText(caseData.radiologyFindings);
       if (radiologyText) {
         const titleY = yPosition;
         yPosition = addText("Radiology Findings", 14, true, 0, 14);
@@ -338,14 +564,14 @@ export async function generateConsensusPDF(
         });
         yPosition -= 10;
 
-        yPosition = addText(radiologyText, 11, false, 20, 12);
+        yPosition = addRichText(caseData.radiologyFindings, 20);
         yPosition -= 20;
       }
     }
 
     // Pathology Findings
     if (includeSection("pathologyFindings")) {
-      const pathologyText = stripInlineImages(caseData.pathologyFindings);
+      const pathologyText = getPlainText(caseData.pathologyFindings);
       if (pathologyText) {
         const titleY = yPosition;
         yPosition = addText("Pathology Findings", 14, true, 0, 14);
@@ -357,14 +583,14 @@ export async function generateConsensusPDF(
         });
         yPosition -= 10;
 
-        yPosition = addText(pathologyText, 11, false, 20, 12);
+        yPosition = addRichText(caseData.pathologyFindings, 20);
         yPosition -= 20;
       }
     }
 
     // Treatment Plan
     if (includeSection("treatmentPlan") && caseData.treatmentPlan) {
-      const treatmentText = stripInlineImages(caseData.treatmentPlan);
+      const treatmentText = getPlainText(caseData.treatmentPlan);
       if (treatmentText) {
         const titleY = yPosition;
         yPosition = addText("Treatment Plan", 14, true, 0, 14);
@@ -376,7 +602,7 @@ export async function generateConsensusPDF(
         });
         yPosition -= 10;
 
-        yPosition = addText(treatmentText, 11, false, 20, 12);
+        yPosition = addRichText(caseData.treatmentPlan, 20);
         yPosition -= 20;
       }
     }
@@ -396,9 +622,9 @@ export async function generateConsensusPDF(
       caseData.specialistsOpinions.forEach((opinion) => {
         const headerText = `${opinion.department.name} - ${opinion.consultant.name}`;
         yPosition = addText(headerText, 11, false, 20, 12);
-        const opinionText = stripInlineImages(opinion.opinionText);
+        const opinionText = getPlainText(opinion.opinionText);
         if (opinionText) {
-          yPosition = addText(opinionText, 11, false, 40, 12);
+          yPosition = addRichText(opinion.opinionText, 40);
           yPosition -= 10;
         }
       });
@@ -406,7 +632,7 @@ export async function generateConsensusPDF(
 
     // Discussion Question
     if (includeSection("question") && caseData.question) {
-      const questionText = stripInlineImages(caseData.question);
+      const questionText = getPlainText(caseData.question);
       if (questionText) {
         const titleY = yPosition;
         yPosition = addText("Discussion Question", 14, true, 0, 14);
@@ -418,7 +644,7 @@ export async function generateConsensusPDF(
         });
         yPosition -= 10;
 
-        yPosition = addText(questionText, 11, false, 20, 12);
+        yPosition = addRichText(caseData.question, 20);
         yPosition -= 20;
       }
     }
@@ -437,9 +663,9 @@ export async function generateConsensusPDF(
       });
       yPosition -= 10;
 
-      const mdtConsensusText = stripInlineImages(consensus.mdtConsensus);
+      const mdtConsensusText = getPlainText(consensus.mdtConsensus);
       if (mdtConsensusText) {
-        yPosition = addText(mdtConsensusText, 11, false, 20, 12);
+        yPosition = addRichText(consensus.mdtConsensus, 20);
         yPosition -= 20;
       }
 
@@ -457,38 +683,38 @@ export async function generateConsensusPDF(
 
       // Remarks
       if (consensus.remarks) {
-        const remarksText = stripInlineImages(consensus.remarks);
+        const remarksText = getPlainText(consensus.remarks);
         if (remarksText) {
           yPosition = addText("Remarks:", 11, false, 20, 12);
-          yPosition = addText(remarksText, 11, false, 40, 12);
+          yPosition = addRichText(consensus.remarks, 40);
           yPosition -= 20;
         }
       }
     }
 
-    // Footer - ClarityMDT (centered, smaller font) and signature block (on last page)
-    const pages = pdfDoc.getPages();
-    const lastPage = pages[pages.length - 1];
-    
-    // Add ClarityMDT footer text (centered, smaller font)
-    const footerText = "ClarityMDT";
-    const footerTextWidth = helveticaFont.widthOfTextAtSize(footerText, 10);
-    lastPage.drawText(footerText, {
-      x: (width - footerTextWidth) / 2,
-      y: 30,
-      size: 10,
-      font: helveticaFont,
-      color: rgb(0.5, 0.5, 0.5), // Gray color for footer
-    });
-    
-    // Signature section - render attendee signatures if provided
+    const drawFooter = (pageToDraw: typeof currentPage) => {
+      const footerText = "ClarityMDT";
+      const footerTextWidth = helveticaFont.widthOfTextAtSize(footerText, 10);
+      pageToDraw.drawText(footerText, {
+        x: (width - footerTextWidth) / 2,
+        y: 30,
+        size: 10,
+        font: helveticaFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    };
+
+    const footerReserveY = 55;
+    const signatureTopGap = 20;
+
+    // Signature section - render attendee signatures after content, never over it.
     if (selectedAttendees && selectedAttendees.length > 0) {
       // Calculate signature dimensions for compact layout
       // Increase height if there are coordinators (they need extra line for "MDT Co-ordinator")
       const hasCoordinators = selectedAttendees.some(a => a.role === "Coordinator" || a.role === "Admin");
-      const signatureAreaStartY = 120;
       const signatureHeight = hasCoordinators ? 60 : 50; // Height for signature image + name + dept (+ coordinator label) - increased to accommodate larger signatures
       const signatureSpacing = 5; // Space between signatures
+      const signatureRowGap = 10;
       const availableWidth = width - 2 * margin;
       const maxSignaturesPerRow = Math.min(selectedAttendees.length, 6); // Max 6 per row
       const signatureWidth = (availableWidth - (maxSignaturesPerRow - 1) * signatureSpacing) / maxSignaturesPerRow;
@@ -496,15 +722,27 @@ export async function generateConsensusPDF(
       const imageWidth = signatureWidth - 10; // Leave some padding
       
       let currentX = margin;
-      let currentY = signatureAreaStartY;
+      let currentY = yPosition - signatureTopGap;
       let signaturesInCurrentRow = 0;
+
+      const ensureSignatureRowSpace = () => {
+        if (currentY - signatureHeight < footerReserveY) {
+          currentPage = pdfDoc.addPage([595, 842]);
+          currentY = height - margin;
+          currentX = margin;
+          signaturesInCurrentRow = 0;
+        }
+      };
+
+      ensureSignatureRowSpace();
       
       for (const attendee of selectedAttendees) {
         if (signaturesInCurrentRow >= maxSignaturesPerRow) {
           // Move to next row
           currentX = margin;
-          currentY -= signatureHeight + 10;
+          currentY -= signatureHeight + signatureRowGap;
           signaturesInCurrentRow = 0;
+          ensureSignatureRowSpace();
         }
         
         try {
@@ -531,7 +769,7 @@ export async function generateConsensusPDF(
               const imageX = currentX + (signatureWidth - imageDims.width) / 2;
               
               // Draw signature image
-              lastPage.drawImage(signatureImage, {
+              currentPage.drawImage(signatureImage, {
                 x: imageX,
                 y: imageY,
                 width: imageDims.width,
@@ -543,7 +781,7 @@ export async function generateConsensusPDF(
           // Draw blank space rectangle if no signature (for physical signature)
           if (!hasSignature) {
             const blankSpaceX = currentX + (signatureWidth - imageWidth) / 2;
-            lastPage.drawRectangle({
+            currentPage.drawRectangle({
               x: blankSpaceX,
               y: imageY,
               width: imageWidth,
@@ -557,7 +795,7 @@ export async function generateConsensusPDF(
           const nameY = imageY - 8;
           const nameText = attendee.name;
           const nameWidth = helveticaFont.widthOfTextAtSize(nameText, 8);
-          lastPage.drawText(nameText, {
+          currentPage.drawText(nameText, {
             x: currentX + (signatureWidth - nameWidth) / 2,
             y: nameY,
             size: 8,
@@ -569,7 +807,7 @@ export async function generateConsensusPDF(
           if (attendee.department) {
             const deptText = attendee.department;
             const deptWidth = helveticaFont.widthOfTextAtSize(deptText, 7);
-            lastPage.drawText(deptText, {
+            currentPage.drawText(deptText, {
               x: currentX + (signatureWidth - deptWidth) / 2,
               y: currentTextY,
               size: 7,
@@ -583,7 +821,7 @@ export async function generateConsensusPDF(
           if (attendee.role === "Coordinator" || attendee.role === "Admin") {
             const coordinatorText = "MDT Co-ordinator";
             const coordinatorWidth = helveticaFont.widthOfTextAtSize(coordinatorText, 7);
-            lastPage.drawText(coordinatorText, {
+            currentPage.drawText(coordinatorText, {
               x: currentX + (signatureWidth - coordinatorWidth) / 2,
               y: currentTextY,
               size: 7,
@@ -601,19 +839,28 @@ export async function generateConsensusPDF(
       }
     } else {
       // Fallback: Show MDT Coordinator Signature if no attendees selected
-      lastPage.drawText("MDT Coordinator Signature", {
+      let signatureY = yPosition - signatureTopGap;
+      if (signatureY - 50 < footerReserveY) {
+        currentPage = pdfDoc.addPage([595, 842]);
+        signatureY = height - margin;
+      }
+
+      currentPage.drawText("MDT Coordinator Signature", {
         x: width - margin - 150,
-        y: 100,
+        y: signatureY - 20,
         size: 10,
         font: helveticaFont,
       });
-      lastPage.drawLine({
-        start: { x: width - margin - 200, y: 85 },
-        end: { x: width - margin, y: 85 },
+      currentPage.drawLine({
+        start: { x: width - margin - 200, y: signatureY - 35 },
+        end: { x: width - margin, y: signatureY - 35 },
         thickness: 0.5,
         color: rgb(0, 0, 0),
       });
     }
+
+    const pages = pdfDoc.getPages();
+    drawFooter(pages[pages.length - 1]);
 
     // Serialize the PDF to bytes
     const pdfBytes = await pdfDoc.save();

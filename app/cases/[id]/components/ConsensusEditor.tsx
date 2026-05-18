@@ -6,16 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Loader2, Save, Edit, Download } from "lucide-react";
+import { Loader2, Save, Edit } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { canEditConsensusReport } from "@/lib/permissions/client";
 import { format } from "date-fns";
@@ -38,28 +29,12 @@ interface ConsensusEditorProps {
   caseId: string;
   initialConsensus?: ConsensusReport | null;
   onSave?: () => void;
-  assignedMeetingId?: string | null;
-}
-
-interface MeetingAttendee {
-  id: string;
-  userId: string;
-  user: {
-    id: string;
-    name: string;
-    department: {
-      name: string;
-    } | null;
-    signatureUrl: string | null;
-    signatureAuthenticated: boolean;
-  };
 }
 
 export function ConsensusEditor({
   caseId,
   initialConsensus,
   onSave,
-  assignedMeetingId,
 }: ConsensusEditorProps) {
   const { data: session } = useSession();
   const [loading, setLoading] = useState(true);
@@ -69,11 +44,6 @@ export function ConsensusEditor({
   const [consensus, setConsensus] = useState<ConsensusReport | null>(
     initialConsensus || null
   );
-  const [isPdfDialogOpen, setIsPdfDialogOpen] = useState(false);
-  const [attendees, setAttendees] = useState<MeetingAttendee[]>([]);
-  const [selectedAttendeeIds, setSelectedAttendeeIds] = useState<string[]>([]);
-  const [loadingAttendees, setLoadingAttendees] = useState(false);
-  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   const [formData, setFormData] = useState({
     finalDiagnosis: "",
@@ -97,35 +67,6 @@ export function ConsensusEditor({
     loadConsensus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [caseId]);
-
-  const loadAttendees = async () => {
-    if (!assignedMeetingId) {
-      setAttendees([]);
-      return;
-    }
-
-    setLoadingAttendees(true);
-    try {
-      const response = await fetch(`/api/meetings/${assignedMeetingId}`);
-      if (response.ok) {
-        const meeting = await response.json();
-        setAttendees(meeting.attendees || []);
-        // Pre-select all attendees (with or without signatures)
-        const allIds = (meeting.attendees || []).map((a: MeetingAttendee) => a.userId);
-        setSelectedAttendeeIds(allIds);
-      }
-    } catch (error) {
-      console.error("Error loading attendees:", error);
-    } finally {
-      setLoadingAttendees(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isPdfDialogOpen && assignedMeetingId) {
-      loadAttendees();
-    }
-  }, [isPdfDialogOpen, assignedMeetingId]);
 
   // Initialize form data when entering edit mode or when consensus changes
   useEffect(() => {
@@ -262,46 +203,6 @@ export function ConsensusEditor({
     setFormData({ ...formData, [e.target.id]: e.target.value });
   };
 
-  const handleDownloadPdf = async () => {
-    if (selectedAttendeeIds.length === 0) {
-      alert("Please select at least one attendee");
-      return;
-    }
-
-    setDownloadingPdf(true);
-    try {
-      // Build query string with selected attendee IDs
-      const attendeeParams = selectedAttendeeIds
-        .map((id) => `attendeeIds=${encodeURIComponent(id)}`)
-        .join("&");
-      
-      const url = `/api/consensus/${caseId}/pdf?${attendeeParams}`;
-      
-      // Trigger download
-      const response = await fetch(url);
-      if (response.ok) {
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = downloadUrl;
-        a.download = `consensus-report-${caseId.substring(0, 8)}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(downloadUrl);
-        document.body.removeChild(a);
-        setIsPdfDialogOpen(false);
-      } else {
-        const error = await response.json();
-        alert(error.error || "Failed to generate PDF");
-      }
-    } catch (error) {
-      console.error("Error downloading PDF:", error);
-      alert("An error occurred while generating the PDF");
-    } finally {
-      setDownloadingPdf(false);
-    }
-  };
-
   if (loading) {
     return (
       <Card>
@@ -334,16 +235,6 @@ export function ConsensusEditor({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {consensus && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsPdfDialogOpen(true)}
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Download PDF
-              </Button>
-            )}
             {canEdit && !isEditing && (
               <Button
                 variant="outline"
@@ -489,103 +380,6 @@ export function ConsensusEditor({
           </p>
         )}
       </CardContent>
-
-      {/* PDF Download Dialog */}
-      <Dialog open={isPdfDialogOpen} onOpenChange={setIsPdfDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Download Consensus PDF</DialogTitle>
-            <DialogDescription>
-              Select meeting attendees to include in the PDF. Attendees with authenticated digital signatures will show their signatures. Others will show a blank space for physical signature.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            {loadingAttendees ? (
-              <div className="flex items-center justify-center p-8">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : !assignedMeetingId ? (
-              <p className="text-sm text-muted-foreground">
-                This case is not assigned to a meeting. No attendees available.
-              </p>
-            ) : attendees.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No attendees found for this meeting.
-              </p>
-            ) : (
-              <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                {attendees.map((attendee) => {
-                  const hasSignature = attendee.user.signatureUrl && attendee.user.signatureAuthenticated;
-                  return (
-                    <div
-                      key={attendee.user.id}
-                      className="flex items-center space-x-2 p-2 rounded border"
-                    >
-                      <Checkbox
-                        id={`attendee-${attendee.user.id}`}
-                        checked={selectedAttendeeIds.includes(attendee.user.id)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedAttendeeIds([...selectedAttendeeIds, attendee.user.id]);
-                          } else {
-                            setSelectedAttendeeIds(
-                              selectedAttendeeIds.filter((id) => id !== attendee.user.id)
-                            );
-                          }
-                        }}
-                      />
-                      <Label
-                        htmlFor={`attendee-${attendee.user.id}`}
-                        className="flex-1 cursor-pointer"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div className="font-medium">{attendee.user.name}</div>
-                          {hasSignature ? (
-                            <span className="text-xs text-green-600">✓ Digital Signature</span>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">(Physical Signature)</span>
-                          )}
-                        </div>
-                        {attendee.user.department && (
-                          <div className="text-sm text-muted-foreground">
-                            {attendee.user.department.name}
-                          </div>
-                        )}
-                      </Label>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsPdfDialogOpen(false)}
-              disabled={downloadingPdf}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleDownloadPdf}
-              disabled={downloadingPdf || selectedAttendeeIds.length === 0}
-            >
-              {downloadingPdf ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download PDF
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </Card>
   );
 }
-
