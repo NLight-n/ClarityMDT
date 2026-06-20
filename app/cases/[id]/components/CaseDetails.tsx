@@ -30,7 +30,7 @@ import { CaseStatus, Gender } from "@prisma/client";
 import { format } from "date-fns";
 import { Archive, Send, RotateCcw, Edit, Save, X, Loader2, Calendar, Trash2, FileText, MonitorPlay, Eye } from "lucide-react";
 import { useSession } from "next-auth/react";
-import { isConsultant, isCoordinator, isRadOrPathConsultant } from "@/lib/permissions/client";
+import { isAdmin, isConsultant, isCoordinator, isRadOrPathConsultant } from "@/lib/permissions/client";
 import Link from "next/link";
 import {
   AlertDialog,
@@ -228,6 +228,7 @@ export function CaseDetails({ caseData, onStatusChange, showUpToPatientInfo, isE
     user.departmentId === caseData.presentingDepartment.id;
 
   const canEdit =
+    isAdmin(user) || // Admin can edit any case regardless of status
     (caseData.status === CaseStatus.DRAFT && (isAuthor || isCoord)) ||
     ((caseData.status === CaseStatus.SUBMITTED ||
       caseData.status === CaseStatus.PENDING ||

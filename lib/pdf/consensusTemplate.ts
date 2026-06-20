@@ -1,6 +1,85 @@
 import { PDFDocument, PDFFont, rgb, StandardFonts } from "pdf-lib";
 import { stripInlineImages } from "./utils";
 
+/**
+ * Characters in WinAnsi (Windows-1252) that have Unicode code points above U+00FF.
+ * pdf-lib standard fonts support these, so we must allow them through.
+ */
+const WINANSI_EXTENDED = new Set([
+  0x0152, 0x0153, 0x0160, 0x0161, 0x0178, 0x017D, 0x017E, // Œ œ Š š Ÿ Ž ž
+  0x0192, 0x02C6, 0x02DC,                                   // ƒ ˆ ˜
+  0x2013, 0x2014,                                             // – — (en-dash, em-dash)
+  0x2018, 0x2019, 0x201A, 0x201C, 0x201D, 0x201E,           // ‘ ’ ‚ “ ” „ (smart quotes)
+  0x2020, 0x2021, 0x2022, 0x2026,                             // † ‡ • … (dagger, bullet, ellipsis)
+  0x2030, 0x2039, 0x203A,                                     // ‰ ‹ ›
+  0x20AC, 0x2122,                                             // € ™ (euro, trademark)
+]);
+
+/**
+ * Common non-WinAnsi Unicode characters mapped to ASCII-safe replacements.
+ * Covers arrows, math symbols, and Greek letters frequently found in
+ * medical documents copy-pasted from Word / Google Docs.
+ */
+const UNICODE_TO_ASCII: Record<number, string> = {
+  // Arrows
+  0x2192: '->', 0x2190: '<-', 0x2191: '^', 0x2193: 'v',
+  0x21D2: '=>', 0x21D0: '<=', 0x2194: '<->',
+  0x27A1: '->', 0x2B95: '->', // other common arrow variants
+  // Math / comparison
+  0x2265: '>=', 0x2264: '<=', 0x2260: '!=', 0x2248: '~',
+  0x221E: 'Inf', 0x2211: 'Sum', 0x221A: 'sqrt',
+  0x00B5: 'u', // µ micro sign (in Latin-1 but sometimes problematic)
+  // Greek letters commonly used in medicine
+  0x03B1: 'alpha', 0x03B2: 'beta', 0x03B3: 'gamma', 0x03B4: 'delta',
+  0x03BA: 'kappa', 0x03BB: 'lambda', 0x03BC: 'u', // μ micro
+  0x03C3: 'sigma', 0x03C9: 'omega',
+  0x0394: 'Delta', 0x03A3: 'Sigma', 0x03A9: 'Omega',
+  // Superscripts not in WinAnsi
+  0x2070: '0', 0x2074: '4', 0x2075: '5',
+  0x2076: '6', 0x2077: '7', 0x2078: '8', 0x2079: '9',
+  // Other medical / document symbols
+  0x2103: 'degC', 0x2109: 'degF', 0x2116: 'No.',
+};
+
+/**
+ * Sanitize text for WinAnsi encoding compatibility.
+ *
+ * pdf-lib standard fonts (Helvetica, etc.) only support WinAnsi (Windows-1252).
+ * Characters outside this encoding (e.g. → ← ≥ μ) cause drawText() to throw
+ * "WinAnsi cannot encode" errors. This function replaces known Unicode chars
+ * with readable ASCII equivalents and silently drops any remaining unsupported ones.
+ */
+function sanitizeForWinAnsi(text: string): string {
+  if (!text) return '';
+
+  let result = '';
+  for (const char of text) {
+    const code = char.charCodeAt(0);
+
+    // Latin-1 range (0x00–0xFF) — fully supported by WinAnsi
+    if (code <= 0xFF) {
+      result += char;
+      continue;
+    }
+
+    // Extended WinAnsi chars above U+00FF (smart quotes, bullets, etc.)
+    if (WINANSI_EXTENDED.has(code)) {
+      result += char;
+      continue;
+    }
+
+    // Known replacement mapping
+    const replacement = UNICODE_TO_ASCII[code];
+    if (replacement !== undefined) {
+      result += replacement;
+      continue;
+    }
+
+    // Unsupported character — drop silently to prevent crash
+  }
+  return result;
+}
+
 // Using pdf-lib instead of PDFKit for better Next.js serverless compatibility
 // pdf-lib doesn't require external font files
 
@@ -117,6 +196,9 @@ export async function generateConsensusPDF(
       } else {
         textStr = String(text);
       }
+
+      // Sanitize for WinAnsi encoding (standard fonts cannot render chars like → ≥ μ)
+      textStr = sanitizeForWinAnsi(textStr);
       
       const font = bold ? helveticaBoldFont : helveticaFont;
       const lines = textStr.split("\n");
@@ -226,7 +308,7 @@ export async function generateConsensusPDF(
       };
 
       if (typeof node.text === "string") {
-        return [{ text: node.text, ...segmentStyle }];
+        return [{ text: sanitizeForWinAnsi(node.text), ...segmentStyle }];
       }
 
       if (Array.isArray(node.content)) {
@@ -436,9 +518,10 @@ export async function generateConsensusPDF(
       
       // Add hospital name if available (below logo or standalone)
       if (hospitalSettings.name) {
+        const sanitizedHospitalName = sanitizeForWinAnsi(hospitalSettings.name);
         const nameY = headerHeight > 0 ? yPosition - headerHeight - 10 : yPosition - 10;
-        const nameWidth = helveticaBoldFont.widthOfTextAtSize(hospitalSettings.name, 16);
-        currentPage.drawText(hospitalSettings.name, {
+        const nameWidth = helveticaBoldFont.widthOfTextAtSize(sanitizedHospitalName, 16);
+        currentPage.drawText(sanitizedHospitalName, {
           x: (width - nameWidth) / 2,
           y: nameY,
           size: 16,
@@ -793,7 +876,7 @@ export async function generateConsensusPDF(
           
           // Draw name below signature/blank space
           const nameY = imageY - 8;
-          const nameText = attendee.name;
+          const nameText = sanitizeForWinAnsi(attendee.name);
           const nameWidth = helveticaFont.widthOfTextAtSize(nameText, 8);
           currentPage.drawText(nameText, {
             x: currentX + (signatureWidth - nameWidth) / 2,
@@ -805,7 +888,7 @@ export async function generateConsensusPDF(
           // Draw department if available
           let currentTextY = nameY - 10;
           if (attendee.department) {
-            const deptText = attendee.department;
+            const deptText = sanitizeForWinAnsi(attendee.department);
             const deptWidth = helveticaFont.widthOfTextAtSize(deptText, 7);
             currentPage.drawText(deptText, {
               x: currentX + (signatureWidth - deptWidth) / 2,
