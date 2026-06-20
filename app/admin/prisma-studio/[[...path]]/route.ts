@@ -97,9 +97,9 @@ async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
 
   // Enforce trailing slash on root to ensure browser resolves relative paths correctly
   if ((!path || path.length === 0) && !request.nextUrl.pathname.endsWith("/")) {
-    const redirectUrl = new URL(request.nextUrl.href);
-    redirectUrl.pathname = `${redirectUrl.pathname}/`;
-    return NextResponse.redirect(redirectUrl);
+    const protocol = request.headers.get("x-forwarded-proto") || "http";
+    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || request.nextUrl.host;
+    return NextResponse.redirect(`${protocol}://${host}${request.nextUrl.pathname}/`);
   }
 
   const targetUrl = buildTargetUrl(request, path);
