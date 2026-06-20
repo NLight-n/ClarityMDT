@@ -44,10 +44,18 @@ function shouldRewriteResponse(contentType: string | null) {
 }
 
 function rewriteStudioText(text: string) {
-  return text
-    .replace(/(href|src)="\/(?!admin\/prisma-studio\/)([^"]*)"/g, `$1="${PROXY_PREFIX}/$2"`)
-    .replace(/(["'`])\/(?!admin\/prisma-studio\/)(bff|telemetry|adapter\.js|data\/|ui\/|assets\/|favicon\.ico)/g, `$1${PROXY_PREFIX}/$2`)
-    .replace(/url\(\/(?!admin\/prisma-studio\/)/g, `url(${PROXY_PREFIX}/`);
+  let rewritten = text
+    .replace(/(href|src)="(?:\.\/|\/)(?!admin\/prisma-studio\/)([^"]*)"/g, `$1="${PROXY_PREFIX}/$2"`)
+    .replace(/(["'`])(?:\.\/|\/)(?!admin\/prisma-studio\/)(bff|telemetry|adapter\.js|data\/|ui\/|assets\/|http\/|favicon\.ico)/g, `$1${PROXY_PREFIX}/$2`)
+    .replace(/url\((?:\.\/|\/)(?!admin\/prisma-studio\/)/g, `url(${PROXY_PREFIX}/`);
+
+  if (rewritten.includes("<head>")) {
+    rewritten = rewritten.replace("<head>", `<head>\n    <base href="${PROXY_PREFIX}/">\n`);
+  } else if (rewritten.includes("<!DOCTYPE html>")) {
+    rewritten = rewritten.replace("<!DOCTYPE html>", `<!DOCTYPE html>\n<head><base href="${PROXY_PREFIX}/"></head>`);
+  }
+
+  return rewritten;
 }
 
 function applyStudioHeaders(headers: Headers) {
@@ -86,6 +94,14 @@ async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
   }
 
   const { path } = await context.params;
+
+  // Enforce trailing slash on root to ensure browser resolves relative paths correctly
+  if ((!path || path.length === 0) && !request.nextUrl.pathname.endsWith("/")) {
+    const redirectUrl = new URL(request.nextUrl.href);
+    redirectUrl.pathname = `${redirectUrl.pathname}/`;
+    return NextResponse.redirect(redirectUrl);
+  }
+
   const targetUrl = buildTargetUrl(request, path);
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
