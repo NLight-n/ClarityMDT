@@ -95,13 +95,6 @@ async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
 
   const { path } = await context.params;
 
-  // Enforce trailing slash on root to ensure browser resolves relative paths correctly
-  if ((!path || path.length === 0) && !request.nextUrl.pathname.endsWith("/")) {
-    const protocol = request.headers.get("x-forwarded-proto") || "http";
-    const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || request.nextUrl.host;
-    return NextResponse.redirect(`${protocol}://${host}${request.nextUrl.pathname}/`);
-  }
-
   const targetUrl = buildTargetUrl(request, path);
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
@@ -111,17 +104,11 @@ async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
       method,
       headers: getForwardHeaders(request, targetUrl),
       body: hasBody ? request.body : undefined,
-      redirect: "manual",
       ...(hasBody ? { duplex: "half" } : {}),
     } as RequestInit & { duplex?: "half" });
 
     const responseHeaders = new Headers(studioResponse.headers);
     applyStudioHeaders(responseHeaders);
-
-    const location = responseHeaders.get("location");
-    if (location?.startsWith("/")) {
-      responseHeaders.set("location", `${PROXY_PREFIX}${location}`);
-    }
 
     if (shouldRewriteResponse(responseHeaders.get("content-type"))) {
       const text = await studioResponse.text();
