@@ -46,7 +46,7 @@ function shouldRewriteResponse(contentType: string | null) {
 function rewriteStudioText(text: string) {
   let rewritten = text
     .replace(/(href|src)="(?:\.\/|\/)(?!admin\/prisma-studio\/)([^"]*)"/g, `$1="${PROXY_PREFIX}/$2"`)
-    .replace(/(["'`])(?:\.\/|\/)(?!admin\/prisma-studio\/)(bff|telemetry|adapter\.js|data\/|ui\/|assets\/|http\/|favicon\.ico)/g, `$1${PROXY_PREFIX}/$2`)
+    .replace(/(["'`])(?:\.\/|\/)(?!admin\/prisma-studio\/)(api|bff|telemetry|adapter\.js|data\/|ui\/|assets\/|http\/|favicon\.ico)/g, `$1${PROXY_PREFIX}/$2`)
     .replace(/url\((?:\.\/|\/)(?!admin\/prisma-studio\/)/g, `url(${PROXY_PREFIX}/`);
 
   if (rewritten.includes("<head>")) {
