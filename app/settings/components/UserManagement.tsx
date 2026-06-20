@@ -29,7 +29,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Role } from "@prisma/client";
-import { Loader2, Plus, Edit, Trash2, UserPlus, UserMinus, Upload, CheckCircle2, AlertCircle, MessageCircle, Phone } from "lucide-react";
+import { Loader2, Plus, Edit, Trash2, UserPlus, UserMinus, Upload, CheckCircle2, AlertCircle, MessageCircle, Phone, X } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { isAdmin } from "@/lib/permissions/client";
 import {
@@ -84,6 +84,7 @@ export function UserManagement() {
   const [uploadingSignature, setUploadingSignature] = useState(false);
   const [signatureFile, setSignatureFile] = useState<File | null>(null);
   const [userSignatures, setUserSignatures] = useState<Record<string, { url: string | null; authenticated: boolean }>>({});
+  const [searchQuery, setSearchQuery] = useState("");
   
   // MessageDialog state
   const [messageDialog, setMessageDialog] = useState<{
@@ -423,6 +424,15 @@ export function UserManagement() {
     );
   }
 
+  const filteredUsers = users.filter((u) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(q) ||
+      u.loginId.toLowerCase().includes(q) ||
+      (u.department?.name || "").toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -430,10 +440,29 @@ export function UserManagement() {
           <h2 className="text-2xl font-bold">User Management</h2>
           <p className="text-muted-foreground">Manage users and their roles</p>
         </div>
-        <Button onClick={() => handleOpenDialog()}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add User
-        </Button>
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Input
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-64 pr-8"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                title="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button onClick={() => handleOpenDialog()}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add User
+          </Button>
+        </div>
       </div>
 
       <div className="rounded-md border">
@@ -448,14 +477,14 @@ export function UserManagement() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   No users found
                 </TableCell>
               </TableRow>
             ) : (
-              users.map((user) => (
+              filteredUsers.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.name}</TableCell>
                   <TableCell>{user.loginId}</TableCell>
