@@ -95,24 +95,75 @@ async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
 
   const { path } = await context.params;
 
+  // Debugging endpoint to inspect the backend Prisma Studio responses
+  if (path && path.length === 1 && path[0] === "debug") {
+    const debugInfo: any = {};
+    const studioUrl = getStudioBaseUrl();
+    debugInfo.studioUrl = studioUrl;
+    
+    // Test root URL
+    try {
+      const rootRes = await fetch(`${studioUrl}/`);
+      debugInfo.rootStatus = rootRes.status;
+      debugInfo.rootHeaders = Object.fromEntries(rootRes.headers.entries());
+      const rootText = await rootRes.text();
+      debugInfo.rootTextSnippet = rootText.substring(0, 3000);
+    } catch (e: any) {
+      debugInfo.rootError = e.message || e.toString();
+    }
+
+    // Test index.css URL
+    try {
+      const cssRes = await fetch(`${studioUrl}/index.css`);
+      debugInfo.cssStatus = cssRes.status;
+      debugInfo.cssHeaders = Object.fromEntries(cssRes.headers.entries());
+      const cssText = await cssRes.text();
+      debugInfo.cssTextSnippet = cssText.substring(0, 1000);
+    } catch (e: any) {
+      debugInfo.cssError = e.message || e.toString();
+    }
+
+    // Test index.js URL
+    try {
+      const jsRes = await fetch(`${studioUrl}/index.js`);
+      debugInfo.jsStatus = jsRes.status;
+      debugInfo.jsHeaders = Object.fromEntries(jsRes.headers.entries());
+      const jsText = await jsRes.text();
+      debugInfo.jsTextSnippet = jsText.substring(0, 1000);
+    } catch (e: any) {
+      debugInfo.jsError = e.message || e.toString();
+    }
+
+    return NextResponse.json(debugInfo);
+  }
+
   const targetUrl = buildTargetUrl(request, path);
   const method = request.method.toUpperCase();
   const hasBody = method !== "GET" && method !== "HEAD";
 
+  console.log(`[PrismaStudio Proxy] Proxying ${method} ${request.nextUrl.pathname} -> ${targetUrl}`);
+
   try {
+    let body: any = undefined;
+    if (hasBody) {
+      body = await request.arrayBuffer();
+    }
+
     const studioResponse = await fetch(targetUrl, {
       method,
       headers: getForwardHeaders(request, targetUrl),
-      body: hasBody ? request.body : undefined,
-      ...(hasBody ? { duplex: "half" } : {}),
-    } as RequestInit & { duplex?: "half" });
+      body,
+    });
+
+    console.log(`[PrismaStudio Proxy] Target response status: ${studioResponse.status} ${studioResponse.statusText}`);
 
     const responseHeaders = new Headers(studioResponse.headers);
     applyStudioHeaders(responseHeaders);
 
     if (shouldRewriteResponse(responseHeaders.get("content-type"))) {
       const text = await studioResponse.text();
-      return new NextResponse(rewriteStudioText(text), {
+      const rewritten = rewriteStudioText(text);
+      return new NextResponse(rewritten, {
         status: studioResponse.status,
         statusText: studioResponse.statusText,
         headers: responseHeaders,
@@ -124,10 +175,10 @@ async function proxyPrismaStudio(request: NextRequest, context: RouteContext) {
       statusText: studioResponse.statusText,
       headers: responseHeaders,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error proxying Prisma Studio:", error);
     return NextResponse.json(
-      { error: "Prisma Studio is not available" },
+      { error: "Prisma Studio is not available", details: error.message || error.toString() },
       { status: 502 }
     );
   }
