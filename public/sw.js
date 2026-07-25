@@ -1,6 +1,6 @@
 const CACHE_NAME = "claritymdt-v1";
 const ASSETS_TO_CACHE = [
-  "/",
+  "/login",
   "/favicon.ico",
   "/icon.svg",
   "/icon-192x192.png",
@@ -12,8 +12,19 @@ const ASSETS_TO_CACHE = [
 // Install Event
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(
+        ASSETS_TO_CACHE.map(async (url) => {
+          try {
+            const response = await fetch(url);
+            if (response.ok && response.type === "basic") {
+              await cache.put(url, response);
+            }
+          } catch (e) {
+            // Silently swallow fetch errors for individual static assets during install
+          }
+        })
+      );
     })
   );
   self.skipWaiting();
