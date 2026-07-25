@@ -24,6 +24,8 @@ import { useRouter } from "next/navigation";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { useSession } from "next-auth/react";
 
+import { PWAInstallButton } from "@/components/providers/PWAInstallButton";
+
 interface TopbarProps {
   userName?: string;
   userRole?: "Admin" | "Coordinator" | "Consultant" | "Viewer" | null;
@@ -70,6 +72,7 @@ export function Topbar({ userName = "User", userRole }: TopbarProps) {
           
           {/* User info and icon */}
           <div className="flex items-center gap-2">
+            <PWAInstallButton />
             <NotificationDropdown userId={session?.user?.id} />
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium leading-none">{userName}</p>
@@ -125,6 +128,7 @@ export function Topbar({ userName = "User", userRole }: TopbarProps) {
 
         {/* User info and menu on the right */}
         <div className="flex items-center gap-3 ml-auto">
+          <PWAInstallButton />
           <NotificationDropdown userId={session?.user?.id} />
           <div className="text-right">
             <p className="text-sm font-medium leading-none">{userName}</p>
