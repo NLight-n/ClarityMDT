@@ -37,10 +37,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <PWARegister />
-        <SessionProvider>
-          <AppLayout>{children}</AppLayout>
-        </SessionProvider>
+        <PWARegister>
+          <SessionProvider>
+            <AppLayout>{children}</AppLayout>
+          </SessionProvider>
+        </PWARegister>
       </body>
     </html>
   );
