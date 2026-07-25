@@ -147,16 +147,6 @@ const nextConfig: NextConfig = {
             value: "strict-origin-when-cross-origin",
           },
           {
-            // Require Cross-Origin Isolation for OHIF Viewer (MPR WebAssembly + SharedArrayBuffer)
-            key: "Cross-Origin-Opener-Policy",
-            value: "same-origin",
-          },
-          {
-            // Require Cross-Origin Isolation for OHIF Viewer (MPR WebAssembly + SharedArrayBuffer)
-            key: "Cross-Origin-Embedder-Policy",
-            value: "require-corp",
-          },
-          {
             // Prevent browser features that might leak PHI
             key: "Permissions-Policy",
             value: "camera=(), microphone=(), geolocation=(), payment=()",
@@ -178,6 +168,24 @@ const nextConfig: NextConfig = {
               "form-action 'self'",
               "base-uri 'self'",
             ].join("; "),
+          },
+        ],
+      },
+      {
+        // Cross-Origin Isolation headers ONLY for OHIF Viewer paths
+        // These are required for SharedArrayBuffer (MPR WebAssembly) but break
+        // PWA manifest/icon loading when applied globally (COEP: require-corp
+        // silently blocks sub-resources without CORP headers, causing Chrome
+        // to treat the manifest as invalid and suppress the PWA install prompt).
+        source: "/ohif-viewer/:path*",
+        headers: [
+          {
+            key: "Cross-Origin-Opener-Policy",
+            value: "same-origin",
+          },
+          {
+            key: "Cross-Origin-Embedder-Policy",
+            value: "require-corp",
           },
         ],
       },

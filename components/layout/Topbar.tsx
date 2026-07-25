@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,20 +9,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { User, LogOut, Menu } from "lucide-react";
+import { User, LogOut } from "lucide-react";
 import Link from "next/link";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Sidebar } from "./Sidebar";
 import { HospitalBranding } from "./HospitalBranding";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { NotificationDropdown } from "@/components/notifications/NotificationDropdown";
 import { useSession } from "next-auth/react";
-
 import { PWAInstallButton } from "@/components/providers/PWAInstallButton";
 
 interface TopbarProps {
@@ -54,32 +46,16 @@ export function Topbar({ userName = "User", userRole }: TopbarProps) {
           <HospitalBranding />
         </div>
         {/* Second line: ClarityMDT on left, User info + icon on right */}
-        <div className="flex items-center justify-between h-14 px-4">
-          <div className="flex items-center">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="mr-2">
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Toggle menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-64 p-0">
-                <Sidebar userRole={userRole} className="border-0" />
-              </SheetContent>
-            </Sheet>
-            <h2 className="text-lg font-semibold">ClarityMDT</h2>
+        <div className="flex items-center justify-between h-12 px-4">
+          <div className="flex items-center gap-2">
+            <img src="/icon.svg" alt="ClarityMDT" className="h-6 w-6 rounded" />
+            <h2 className="text-base font-semibold">ClarityMDT</h2>
           </div>
           
           {/* User info and icon */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <PWAInstallButton />
             <NotificationDropdown userId={session?.user?.id} />
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium leading-none">{userName}</p>
-              <p className="text-xs leading-none text-muted-foreground">
-                {userRole || "Not logged in"}
-              </p>
-            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
