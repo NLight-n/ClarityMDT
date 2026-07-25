@@ -3,6 +3,10 @@ const ASSETS_TO_CACHE = [
   "/",
   "/favicon.ico",
   "/icon.svg",
+  "/icon-192x192.png",
+  "/icon-512x512.png",
+  "/apple-touch-icon.png",
+  "/manifest.webmanifest",
 ];
 
 // Install Event
@@ -33,16 +37,26 @@ self.addEventListener("activate", (event) => {
 
 // Fetch Event (Network-First Fallback-to-Cache strategy)
 self.addEventListener("fetch", (event) => {
-  // Only intercept HTTP/HTTPS GET requests (avoid chrome-extension:// or POST requests)
+  // Only intercept HTTP/HTTPS GET requests from the same origin
   if (!event.request.url.startsWith(self.location.origin) || event.request.method !== "GET") {
+    return;
+  }
+
+  // Bypass service worker caching for API routes, Next data routes, and OHIF viewer paths
+  const url = new URL(event.request.url);
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname.startsWith("/_next/data/") ||
+    url.pathname.startsWith("/ohif-viewer/")
+  ) {
     return;
   }
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Cache successful responses for future offline use
-        if (response && response.status === 200) {
+        // Cache successful basic GET responses for future offline use
+        if (response && response.status === 200 && response.type === "basic") {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);

@@ -6,9 +6,11 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: "ClarityMDT",
     description: "Digital register system for MDT meetings and clinical reviews.",
     start_url: "/",
+    scope: "/",
     display: "standalone",
-    background_color: "#ffffff",
-    theme_color: "#0f172a", // Slate-900 matching the theme
+    orientation: "any",
+    background_color: "#0f172a",
+    theme_color: "#0f172a",
     icons: [
       {
         src: "/icon-192x192.png",
@@ -25,6 +27,12 @@ export default function manifest(): MetadataRoute.Manifest {
       {
         src: "/icon-512x512.png",
         sizes: "512x512",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/apple-touch-icon.png",
+        sizes: "180x180",
         type: "image/png",
         purpose: "any",
       },

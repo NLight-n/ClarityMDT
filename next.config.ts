@@ -24,8 +24,6 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "2mb",
     },
   },
-  // HIPAA Compliance: Security Headers
-  // These headers protect against common web vulnerabilities
   async rewrites() {
     return [
       // OHIF viewer static asset rewrites
@@ -44,12 +42,8 @@ const nextConfig: NextConfig = {
         destination: "/ohif-viewer/init-service-worker.js",
       },
       {
-        source: "/sw.js",
-        destination: "/ohif-viewer/sw.js",
-      },
-      {
         source: "/manifest.json",
-        destination: "/ohif-viewer/manifest.json",
+        destination: "/manifest.webmanifest",
       },
       // JS bundles (numbered chunks and named bundles)
       {
@@ -210,4 +204,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-

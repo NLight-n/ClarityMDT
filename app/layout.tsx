@@ -8,9 +8,20 @@ import { PWARegister } from "@/components/providers/PWARegister";
 export const metadata: Metadata = {
   title: "ClarityMDT",
   description: "ClarityMDT - Multi-Disciplinary Team Register Digital System",
+  manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/icon.svg?v=2",
-    apple: "/icon.svg?v=2",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/icon.svg", type: "image/svg+xml" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "ClarityMDT",
   },
 };
 
