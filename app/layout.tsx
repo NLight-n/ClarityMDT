@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import type { Viewport } from "next";
 import "./globals.css";
 import { SessionProvider } from "@/components/providers/SessionProvider";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PWARegister } from "@/components/providers/PWARegister";
 
 export const metadata: Metadata = {
   title: "ClarityMDT",
@@ -12,6 +14,10 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,6 +26,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <PWARegister />
         <SessionProvider>
           <AppLayout>{children}</AppLayout>
         </SessionProvider>
