@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
   // These get rewritten to /ohif-viewer/ by next.config.ts, but middleware runs before rewrites
   // We must detect and bypass ALL static assets the OHIF viewer needs
   const ext = pathname.split('.').pop()?.toLowerCase() || '';
-  const staticExtensions = ['js', 'css', 'wasm', 'woff', 'woff2', 'svg', 'png', 'ico', 'json', 'html', 'map'];
+  const staticExtensions = ['js', 'css', 'wasm', 'woff', 'woff2', 'svg', 'png', 'ico', 'json', 'html', 'map', 'webmanifest'];
   const isOhifAsset =
     pathname.startsWith("/ohif-viewer") ||
     pathname.startsWith("/assets") ||

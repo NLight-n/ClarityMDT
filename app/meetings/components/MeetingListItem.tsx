@@ -41,42 +41,59 @@ export function MeetingListItem({
   const isCancelled = status === "CANCELLED";
 
   return (
-    <div className="flex items-center justify-between p-4 border rounded-lg bg-white shadow-sm hover:bg-neutral-50 transition-colors">
+    <div className="flex flex-col md:flex-row md:items-center justify-between p-3.5 md:p-4 border rounded-lg bg-white shadow-sm hover:bg-neutral-50 transition-colors gap-3 md:gap-4">
 
-      <div className="flex items-center gap-4 flex-1 min-w-0">
-        {/* Date */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Calendar className="h-5 w-5 text-muted-foreground" />
-          <div className="text-sm font-medium whitespace-nowrap">
-            {format(meetingDate, "MMM dd, yyyy")}
+      <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 flex-1 min-w-0">
+        <div className="flex items-center justify-between md:justify-start gap-2 flex-wrap">
+          {/* Date & Time */}
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Calendar className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
+            <div className="text-sm font-semibold md:font-medium whitespace-nowrap">
+              {format(meetingDate, "MMM dd, yyyy")}
+            </div>
+            <div className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">
+              {format(meetingDate, "HH:mm")}
+            </div>
           </div>
-          <div className="text-sm text-muted-foreground whitespace-nowrap">
-            {format(meetingDate, "HH:mm")}
+
+          {/* Status Tags */}
+          <div className="flex items-center gap-1.5 flex-shrink-0 md:hidden">
+            {isCompleted && (
+              <Badge variant="default" className="bg-green-600 text-xs px-2 py-0.5">
+                Completed
+              </Badge>
+            )}
+            {isCancelled && (
+              <Badge variant="destructive" className="text-xs px-2 py-0.5">Cancelled</Badge>
+            )}
+            {!isCompleted && !isCancelled && (
+              <Badge variant="secondary" className="text-xs px-2 py-0.5">Past</Badge>
+            )}
           </div>
         </div>
 
         {/* Description */}
         <div className="flex-1 min-w-0">
           {meeting.description ? (
-            <p className="text-sm font-medium truncate">{meeting.description}</p>
+            <p className="text-xs md:text-sm font-medium line-clamp-2 md:truncate">{meeting.description}</p>
           ) : (
-            <p className="text-sm text-muted-foreground italic">No description</p>
+            <p className="text-xs md:text-sm text-muted-foreground italic">No description</p>
           )}
         </div>
 
         {/* Info */}
-        <div className="flex items-center gap-4 flex-shrink-0 text-sm text-muted-foreground">
+        <div className="flex items-center gap-3 text-xs md:text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
-            <Users className="h-4 w-4" />
+            <Users className="h-3.5 w-3.5 md:h-4 md:w-4" />
             <span>{meeting._count.cases} case(s)</span>
           </div>
-          <div className="hidden sm:block">
+          <div>
             Created by {meeting.createdBy.name}
           </div>
         </div>
 
-        {/* Status Tags */}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        {/* Desktop Status Tags */}
+        <div className="hidden md:flex items-center gap-2 flex-shrink-0">
           {isCompleted && (
             <Badge variant="default" className="bg-green-600">
               Completed
@@ -92,8 +109,8 @@ export function MeetingListItem({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex items-center gap-2 flex-shrink-0 ml-4">
-        <Button variant="outline" size="sm" asChild>
+      <div className="flex items-center gap-2 flex-wrap pt-2 md:pt-0 border-t md:border-t-0 border-neutral-100 flex-shrink-0">
+        <Button variant="outline" size="sm" asChild className="h-8 text-xs sm:text-sm">
           <Link href={`/register?meetingId=${meeting.id}`}>
             View Cases
           </Link>
@@ -103,8 +120,9 @@ export function MeetingListItem({
             variant="outline"
             size="sm"
             onClick={() => onViewAttendees(meeting.id)}
+            className="h-8 text-xs sm:text-sm"
           >
-            <UserCheck className="h-4 w-4 mr-1" />
+            <UserCheck className="h-3.5 w-3.5 mr-1" />
             Attendees
           </Button>
         )}
@@ -115,8 +133,9 @@ export function MeetingListItem({
                 variant="outline"
                 size="sm"
                 onClick={() => onComplete(meeting.id)}
+                className="h-8 text-xs sm:text-sm"
               >
-                <CheckCircle2 className="h-4 w-4 mr-1" />
+                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                 Complete
               </Button>
             )}
@@ -125,18 +144,20 @@ export function MeetingListItem({
                 variant="outline"
                 size="sm"
                 onClick={() => onCancel(meeting.id)}
+                className="h-8 text-xs sm:text-sm"
               >
-                <XCircle className="h-4 w-4 mr-1" />
+                <XCircle className="h-3.5 w-3.5 mr-1" />
                 Cancel
               </Button>
             )}
             {onEdit && (
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={() => onEdit(meeting.id)}
+                className="h-8 w-8"
               >
-                <Edit className="h-4 w-4" />
+                <Edit className="h-3.5 w-3.5" />
               </Button>
             )}
           </>

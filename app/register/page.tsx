@@ -4,10 +4,21 @@ import { useState, useEffect, Suspense } from "react";
 import { RegisterView } from "./components/RegisterView";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Calendar as CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CaseStatus, Gender } from "@prisma/client";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import dynamic from "next/dynamic";
+
+const CalendarSidebar = dynamic(
+  () => import("./components/CalendarSidebar").then((mod) => ({ default: mod.CalendarSidebar })),
+  { ssr: false }
+);
 
 interface Meeting {
   id: string;
@@ -140,8 +151,19 @@ function RegisterPageContent() {
   return (
     <div className="container mx-auto p-3 md:px-4 md:py-3">
       <div className="mb-3 md:mb-2">
-        <div className="md:hidden">
-          <h1 className="text-2xl font-bold mb-2">MDT Register</h1>
+        <div className="md:hidden flex items-center justify-between mb-2">
+          <h1 className="text-2xl font-bold">MDT Register</h1>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <CalendarIcon className="h-4 w-4" />
+                <span className="text-xs">Calendar</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-0" align="end">
+              <CalendarSidebar className="border-0 shadow-none" />
+            </PopoverContent>
+          </Popover>
         </div>
         
         {/* Mobile Navigation - Compact Layout */}

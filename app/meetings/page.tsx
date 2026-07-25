@@ -192,17 +192,17 @@ export default function MeetingsPage() {
 
   return (
     <>
-      <div className="container mx-auto p-6 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="container mx-auto p-4 md:p-6 space-y-5 md:space-y-6">
+        <div className="flex items-start sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold">Meetings</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-bold">Meetings</h1>
+            <p className="text-sm text-muted-foreground">
               View and manage all MDT meetings
             </p>
           </div>
           {canManageMeetings && (
-            <Button onClick={() => handleOpenForm()}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button onClick={() => handleOpenForm()} size="sm" className="flex-shrink-0">
+              <Plus className="mr-1.5 h-4 w-4" />
               New Meeting
             </Button>
           )}
@@ -210,9 +210,9 @@ export default function MeetingsPage() {
 
         {/* Upcoming Meetings */}
         {upcomingMeetings.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-2xl font-semibold">Upcoming Meetings</h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-3 md:space-y-4">
+            <h2 className="text-xl md:text-2xl font-semibold">Upcoming Meetings</h2>
+            <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
               {upcomingMeetings.map((meeting) => (
                 <MeetingCard
                   key={meeting.id}
