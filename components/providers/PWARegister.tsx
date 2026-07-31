@@ -18,6 +18,22 @@ export function usePWA() {
   return useContext(PWAContext);
 }
 
+/**
+ * Resilient helper to acquire an active Service Worker registration
+ * using a 10-second timeout race condition guard.
+ */
+export async function ensurePushServiceWorker(): Promise<ServiceWorkerRegistration> {
+  if (typeof window === "undefined" || !("serviceWorker" in navigator)) {
+    throw new Error("Service Workers are not supported in this browser.");
+  }
+
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Service Worker activation timed out (10s limit).")), 10000)
+  );
+
+  return Promise.race([navigator.serviceWorker.ready, timeout]);
+}
+
 export function PWARegister({ children }: { children?: ReactNode }) {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);

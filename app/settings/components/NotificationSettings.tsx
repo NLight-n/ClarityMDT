@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Check, CheckCheck, Trash2, Loader2, Send, MessageSquare, Trash } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Bell, Smartphone, MessageCircle, Share2, Check, CheckCheck, Trash2, Loader2, Send, MessageSquare, Trash } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useSession } from "next-auth/react";
 import { isCoordinator } from "@/lib/permissions/client";
+import { subscribeUserToPush, unsubscribeUserFromPush } from "@/lib/push/client";
 import {
   Dialog,
   DialogContent,
@@ -94,6 +96,16 @@ export function NotificationSettings() {
   const [loading, setLoading] = useState(true);
   const [markingAll, setMarkingAll] = useState(false);
 
+  // Notification Channel Preferences State
+  const [channelPrefs, setChannelPrefs] = useState({
+    notifyInApp: true,
+    notifyWebPush: true,
+    notifyTelegram: true,
+    notifyWhatsapp: true,
+  });
+  const [loadingPrefs, setLoadingPrefs] = useState(true);
+  const [updatingChannel, setUpdatingChannel] = useState<string | null>(null);
+
   // Manual notification form state
   const [manualNotificationOpen, setManualNotificationOpen] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
@@ -148,9 +160,70 @@ export function NotificationSettings() {
     }
   };
 
+  const fetchChannelPrefs = async () => {
+    setLoadingPrefs(true);
+    try {
+      const response = await fetch("/api/profile/notification-preferences");
+      if (response.ok) {
+        const data = await response.json();
+        setChannelPrefs({
+          notifyInApp: data.notifyInApp ?? true,
+          notifyWebPush: data.notifyWebPush ?? true,
+          notifyTelegram: data.notifyTelegram ?? true,
+          notifyWhatsapp: data.notifyWhatsapp ?? true,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching notification channel preferences:", error);
+    } finally {
+      setLoadingPrefs(false);
+    }
+  };
+
   useEffect(() => {
     fetchNotifications();
+    fetchChannelPrefs();
   }, []);
+
+  const handleToggleChannelPref = async (key: keyof typeof channelPrefs, newValue: boolean) => {
+    setUpdatingChannel(key);
+    try {
+      if (key === "notifyWebPush") {
+        if (newValue) {
+          try {
+            await subscribeUserToPush();
+          } catch (err: any) {
+            console.error("Push subscription failed:", err);
+            setMessageDialog({
+              open: true,
+              type: "error",
+              title: "Web Push Permission Error",
+              message: err?.message || "Failed to enable Web Push notifications. Check browser permissions.",
+            });
+            setUpdatingChannel(null);
+            return;
+          }
+        } else {
+          await unsubscribeUserFromPush().catch(() => {});
+        }
+      }
+
+      const res = await fetch("/api/profile/notification-preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: newValue }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setChannelPrefs((prev) => ({ ...prev, [key]: updated[key] }));
+      }
+    } catch (error) {
+      console.error("Error updating notification preference:", error);
+    } finally {
+      setUpdatingChannel(null);
+    }
+  };
 
   // Fetch departments and users for manual notification form
   useEffect(() => {
@@ -488,6 +561,96 @@ export function NotificationSettings() {
 
   return (
     <div className="space-y-6">
+      {/* Channel Preferences Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Bell className="h-5 w-5 text-primary" />
+            <span>Notification Delivery Channels</span>
+          </CardTitle>
+          <CardDescription>
+            Choose which channels you want to receive alerts on. Enable or disable channels based on your preference.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingPrefs ? (
+            <div className="flex items-center justify-center p-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between p-4 border rounded-xl bg-card shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600">
+                    <Bell className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">In-App Notifications</p>
+                    <p className="text-xs text-muted-foreground">Notification bell & dropdown inside app</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={channelPrefs.notifyInApp}
+                  disabled={updatingChannel === "notifyInApp"}
+                  onCheckedChange={(checked) => handleToggleChannelPref("notifyInApp", checked)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-xl bg-card shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600">
+                    <Smartphone className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Web Push Notifications</p>
+                    <p className="text-xs text-muted-foreground">Native OS alerts even when browser is closed</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={channelPrefs.notifyWebPush}
+                  disabled={updatingChannel === "notifyWebPush"}
+                  onCheckedChange={(checked) => handleToggleChannelPref("notifyWebPush", checked)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-xl bg-card shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-sky-50 dark:bg-sky-950/40 text-sky-600">
+                    <MessageSquare className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">Telegram Bot</p>
+                    <p className="text-xs text-muted-foreground">Instant alerts via Telegram Bot</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={channelPrefs.notifyTelegram}
+                  disabled={updatingChannel === "notifyTelegram"}
+                  onCheckedChange={(checked) => handleToggleChannelPref("notifyTelegram", checked)}
+                />
+              </div>
+
+              <div className="flex items-center justify-between p-4 border rounded-xl bg-card shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600">
+                    <MessageCircle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">WhatsApp Business</p>
+                    <p className="text-xs text-muted-foreground">Direct updates on WhatsApp number</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={channelPrefs.notifyWhatsapp}
+                  disabled={updatingChannel === "notifyWhatsapp"}
+                  onCheckedChange={(checked) => handleToggleChannelPref("notifyWhatsapp", checked)}
+                />
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Action Buttons */}
       <div className="flex gap-4">
         {isUserCoordinator && (

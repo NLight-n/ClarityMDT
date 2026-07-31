@@ -116,6 +116,12 @@ model User {
   twoFactorEnabled          Boolean          @default(false) // Only effective when telegramId or whatsappPhone is set
   preferredTwoFactorChannel TwoFactorChannel @default(TELEGRAM) // Preferred channel for 2FA codes
 
+  // Notification Channel Preferences (User Opt-in/Opt-out)
+  notifyInApp   Boolean @default(true)
+  notifyWebPush Boolean @default(true)
+  notifyTelegram Boolean @default(true)
+  notifyWhatsapp Boolean @default(true)
+
   // Soft delete: when a user is "deleted", isActive is set to false
   // The user record is preserved so historical data (cases, opinions, meetings) remains intact
   isActive Boolean @default(true)
@@ -132,6 +138,8 @@ model User {
   whatsappVerification WhatsappVerification?
   twoFactorCodes       TwoFactorCode[]
   notifications        Notification[]
+  pushSubscriptions    PushSubscription[]
+  webauthnCredentials  WebAuthnCredential[]
   backups              Backup[]
 
   createdAt DateTime @default(now())
@@ -493,3 +501,40 @@ model MprJob {
   @@index([status])
   @@map("mpr_jobs")
 }
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model WebAuthnCredential {
+  id           String   @id @default(uuid())
+  userId       String
+  credentialId String   @unique // Base64url encoded credential ID
+  publicKey    String           // Base64url encoded public key
+  counter      BigInt   @default(0)
+  deviceType   String?          // "singleDevice" or "multiDevice"
+  backedUp     Boolean  @default(false)
+  transports   String?          // JSON string of transports array
+  friendlyName String?          // User-given name like "My Phone Face ID"
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@map("webauthn_credentials")
+}
+

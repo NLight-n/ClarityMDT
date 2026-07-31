@@ -6,6 +6,8 @@ import { Topbar } from "@/components/layout/Topbar";
 import { BottomNav } from "@/components/layout/BottomNav";
 import { useSession } from "next-auth/react";
 import { AlertProvider } from "@/contexts/AlertContext";
+import { OfflineBanner } from "@/components/pwa/OfflineBanner";
+import { InstallBanner } from "@/components/pwa/InstallBanner";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -15,7 +17,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   if (pathname?.startsWith("/login") || pathname?.startsWith("/setup")) {
     return (
       <AlertProvider>
+        <OfflineBanner />
         {children}
+        <InstallBanner />
       </AlertProvider>
     );
   }
@@ -25,6 +29,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <AlertProvider>
+      <OfflineBanner />
       <div className="flex h-screen overflow-hidden">
         {/* Desktop Sidebar (Left Full-Height) */}
         <aside className="hidden md:block w-64 flex-shrink-0">
@@ -42,6 +47,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Mobile Bottom Navigation */}
       <BottomNav />
+      <InstallBanner />
     </AlertProvider>
   );
 }

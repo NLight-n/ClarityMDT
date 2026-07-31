@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Shield, Loader2 } from "lucide-react";
+import { AlertCircle, Shield, Loader2, Fingerprint } from "lucide-react";
+import { isWebAuthnAvailable, authenticateWithPasskey } from "@/lib/webauthn/client";
 
 interface HospitalSettings {
   name: string | null;
@@ -23,6 +24,12 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [csrfToken, setCsrfToken] = useState<string | null>(null);
   const [hospitalSettings, setHospitalSettings] = useState<HospitalSettings | null>(null);
+  const [hasPasskeySupport, setHasPasskeySupport] = useState(false);
+  const [isPasskeyLoading, setIsPasskeyLoading] = useState(false);
+
+  useEffect(() => {
+    isWebAuthnAvailable().then((supported) => setHasPasskeySupport(supported)).catch(() => {});
+  }, []);
 
   // 2FA state
   const [requires2FA, setRequires2FA] = useState(false);
@@ -500,7 +507,7 @@ function LoginForm() {
             <Button
               type="submit"
               className="w-full"
-              disabled={isLoading}
+              disabled={isLoading || isPasskeyLoading}
             >
               {isLoading ? (
                 <>
@@ -511,6 +518,49 @@ function LoginForm() {
                 "Sign in"
               )}
             </Button>
+
+            {hasPasskeySupport && (
+              <>
+                <div className="relative my-2">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or</span>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full flex items-center justify-center gap-2"
+                  disabled={isLoading || isPasskeyLoading}
+                  onClick={async () => {
+                    setError(null);
+                    setIsPasskeyLoading(true);
+                    try {
+                      await authenticateWithPasskey(loginId.trim() || undefined);
+                      window.location.href = "/dashboard";
+                    } catch (err: any) {
+                      console.error("Passkey login error:", err);
+                      setError(err?.message || "Biometric authentication failed or cancelled.");
+                      setIsPasskeyLoading(false);
+                    }
+                  }}
+                >
+                  {isPasskeyLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Verifying Biometrics...
+                    </>
+                  ) : (
+                    <>
+                      <Fingerprint className="h-4 w-4 mr-2 text-primary" />
+                      Sign in with Passkey / Biometrics
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
           </form>
         </CardContent>
       </Card>

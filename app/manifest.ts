@@ -10,8 +10,9 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "any",
-    background_color: "#0f172a",
-    theme_color: "#0f172a",
+    background_color: "#fafafa",
+    theme_color: "#ffffff",
+    categories: ["medical", "productivity"],
     icons: [
       {
         src: "/icon-192x192.png",
@@ -42,6 +43,36 @@ export default function manifest(): MetadataRoute.Manifest {
         sizes: "180x180",
         type: "image/png",
         purpose: "any",
+      },
+    ],
+    shortcuts: [
+      {
+        name: "MDT Register",
+        short_name: "Register",
+        description: "View and manage MDT Register",
+        url: "/register",
+        icons: [{ src: "/icon-192x192.png", sizes: "192x192" }],
+      },
+      {
+        name: "Dashboard",
+        short_name: "Dashboard",
+        description: "Go to Dashboard",
+        url: "/dashboard",
+        icons: [{ src: "/icon-192x192.png", sizes: "192x192" }],
+      },
+      {
+        name: "Cases",
+        short_name: "Cases",
+        description: "View Clinical Cases",
+        url: "/cases",
+        icons: [{ src: "/icon-192x192.png", sizes: "192x192" }],
+      },
+      {
+        name: "Meetings",
+        short_name: "Meetings",
+        description: "Schedule & View MDT Meetings",
+        url: "/meetings",
+        icons: [{ src: "/icon-192x192.png", sizes: "192x192" }],
       },
     ],
   };

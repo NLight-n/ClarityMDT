@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Save, X, CheckCircle2, AlertCircle, MessageSquare, Copy, Check, Shield } from "lucide-react";
+import { Loader2, Save, X, CheckCircle2, AlertCircle, MessageSquare, Copy, Check, Shield, Fingerprint, KeyRound, Trash2 } from "lucide-react";
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Role } from "@prisma/client";
 import { MessageDialog } from "@/components/ui/message-dialog";
+import { isWebAuthnAvailable, registerPasskey } from "@/lib/webauthn/client";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -144,6 +145,88 @@ export function UserProfile() {
     title: "",
     message: "",
   });
+
+  // Passkeys & WebAuthn state
+  interface PasskeyItem {
+    id: string;
+    credentialId: string;
+    friendlyName: string | null;
+    deviceType: string | null;
+    backedUp: boolean;
+    createdAt: string;
+  }
+
+  const [passkeys, setPasskeys] = useState<PasskeyItem[]>([]);
+  const [loadingPasskeys, setLoadingPasskeys] = useState(false);
+  const [hasPasskeySupport, setHasPasskeySupport] = useState(false);
+  const [registeringPasskey, setRegisteringPasskey] = useState(false);
+  const [passkeyNameInput, setPasskeyNameInput] = useState("");
+  const [addPasskeyDialogOpen, setAddPasskeyDialogOpen] = useState(false);
+
+  useEffect(() => {
+    isWebAuthnAvailable().then((supported) => {
+      setHasPasskeySupport(supported);
+      if (supported) {
+        fetchPasskeys();
+      }
+    }).catch(() => {});
+  }, []);
+
+  const fetchPasskeys = async () => {
+    setLoadingPasskeys(true);
+    try {
+      const res = await fetch("/api/auth/webauthn/credentials");
+      if (res.ok) {
+        const data = await res.json();
+        setPasskeys(data);
+      }
+    } catch (err) {
+      console.error("Error fetching passkeys:", err);
+    } finally {
+      setLoadingPasskeys(false);
+    }
+  };
+
+  const handleAddNewPasskey = async () => {
+    setRegisteringPasskey(true);
+    try {
+      await registerPasskey(passkeyNameInput.trim() || undefined);
+      setAddPasskeyDialogOpen(false);
+      setPasskeyNameInput("");
+      fetchPasskeys();
+      setMessageDialog({
+        open: true,
+        type: "success",
+        title: "Passkey Registered",
+        message: "Your biometric passkey has been successfully registered to your account.",
+      });
+    } catch (err: any) {
+      console.error("Error registering passkey:", err);
+      setMessageDialog({
+        open: true,
+        type: "error",
+        title: "Passkey Registration Failed",
+        message: err?.message || "Could not complete biometric registration.",
+      });
+    } finally {
+      setRegisteringPasskey(false);
+    }
+  };
+
+  const handleDeletePasskey = async (id: string) => {
+    try {
+      const res = await fetch("/api/auth/webauthn/credentials", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (res.ok) {
+        setPasskeys((prev) => prev.filter((p) => p.id !== id));
+      }
+    } catch (err) {
+      console.error("Error deleting passkey:", err);
+    }
+  };
   const [formData, setFormData] = useState({
     name: "",
     loginId: "",
@@ -1845,6 +1928,110 @@ export function UserProfile() {
           )}
         </CardContent>
       </Card>
+
+      {/* Passkeys & Biometrics Card (shown when WebAuthn is supported & not raw IP) */}
+      {hasPasskeySupport && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Fingerprint className="h-5 w-5 text-primary" />
+              <span>Passkeys & Biometric Authentication</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Sign in securely using Touch ID, Face ID, Fingerprint, or screen lock biometrics without needing a password.
+            </p>
+
+            <div className="flex items-center justify-between pt-2">
+              <span className="text-sm font-semibold">Registered Biometric Devices ({passkeys.length})</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5"
+                onClick={() => setAddPasskeyDialogOpen(true)}
+              >
+                <Fingerprint className="h-4 w-4 text-primary" />
+                <span>Register New Passkey</span>
+              </Button>
+            </div>
+
+            {loadingPasskeys ? (
+              <div className="flex justify-center p-4">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : passkeys.length === 0 ? (
+              <div className="p-4 border rounded-xl bg-muted/30 text-center text-sm text-muted-foreground">
+                No passkeys registered yet. Click &quot;Register New Passkey&quot; to set up Touch ID or Face ID.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {passkeys.map((pk) => (
+                  <div key={pk.id} className="flex items-center justify-between p-3 border rounded-xl bg-card">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                        <KeyRound className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{pk.friendlyName || "Biometric Passkey"}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Added on {new Date(pk.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDeletePasskey(pk.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <Dialog open={addPasskeyDialogOpen} onOpenChange={setAddPasskeyDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Fingerprint className="h-5 w-5 text-primary" />
+                    <span>Register New Passkey</span>
+                  </DialogTitle>
+                  <DialogDescription>
+                    Give this passkey a friendly name (e.g. &quot;My iPhone Face ID&quot; or &quot;Work Laptop Fingerprint&quot;).
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
+                  <Label htmlFor="passkey-name">Device / Passkey Name</Label>
+                  <Input
+                    id="passkey-name"
+                    placeholder="e.g. Hospital iPad Touch ID"
+                    value={passkeyNameInput}
+                    onChange={(e) => setPasskeyNameInput(e.target.value)}
+                  />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setAddPasskeyDialogOpen(false)} disabled={registeringPasskey}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleAddNewPasskey} disabled={registeringPasskey}>
+                    {registeringPasskey ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Scanning Biometrics...
+                      </>
+                    ) : (
+                      "Scan & Register"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
+      )}
 
       <AlertDialog open={unlinkDialogOpen} onOpenChange={setUnlinkDialogOpen}>
         <AlertDialogContent>
