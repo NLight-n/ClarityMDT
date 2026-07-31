@@ -122,8 +122,9 @@ export async function POST(request: NextRequest) {
     });
 
     return res;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error verifying WebAuthn authentication:", error);
-    return NextResponse.json({ error: "Biometric verification error" }, { status: 500 });
+    const errMsg = error?.message || "Unknown verification error";
+    return NextResponse.json({ error: `Biometric verification error: ${errMsg}` }, { status: 500 });
   }
 }
