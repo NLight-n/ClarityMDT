@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
 
       allowCredentials = credentials.map((cred) => ({
         id: cred.credentialId,
+        type: "public-key" as const,
         transports: cred.transports ? JSON.parse(cred.transports) : undefined,
       }));
     } else {
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
 
       allowCredentials = allCredentials.map((cred) => ({
         id: cred.credentialId,
+        type: "public-key" as const,
         transports: cred.transports ? JSON.parse(cred.transports) : undefined,
       }));
     }
