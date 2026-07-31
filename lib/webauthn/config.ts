@@ -1,4 +1,25 @@
 import { NextRequest } from "next/server";
+import nodeCrypto from "node:crypto";
+
+// Ensure Node's native C++ WebCrypto implementation is set on globalThis
+// to prevent Next.js bundler polyfills from throwing RSA-PSS salt errors during verification
+export function ensureNativeWebCrypto() {
+  if (typeof globalThis !== "undefined" && nodeCrypto && nodeCrypto.webcrypto) {
+    try {
+      Object.defineProperty(globalThis, "crypto", {
+        value: nodeCrypto.webcrypto,
+        writable: true,
+        configurable: true,
+      });
+    } catch {
+      // Fallback assignment if defineProperty fails
+      (globalThis as any).crypto = nodeCrypto.webcrypto;
+    }
+  }
+}
+
+// Execute immediately when module is imported
+ensureNativeWebCrypto();
 
 const challengeMap = new Map<string, { challenge: string; expiresAt: number }>();
 
@@ -24,6 +45,8 @@ export function deleteWebAuthnChallenge(userId: string) {
 }
 
 export function getRelyingPartyConfig(request: NextRequest) {
+  ensureNativeWebCrypto();
+
   const hostHeader = request.headers.get("host") || "localhost";
   const hostname = hostHeader.split(":")[0];
   const protocol = request.headers.get("x-forwarded-proto") || (request.url.startsWith("https") ? "https" : "http");

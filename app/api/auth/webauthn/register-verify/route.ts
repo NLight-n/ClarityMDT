@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { prisma } from "@/lib/prisma";
-import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge } from "@/lib/webauthn/config";
+import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge, ensureNativeWebCrypto } from "@/lib/webauthn/config";
 
 export async function POST(request: NextRequest) {
   try {
+    ensureNativeWebCrypto();
     const user = await getCurrentUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { encode } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
-import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge } from "@/lib/webauthn/config";
+import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge, ensureNativeWebCrypto } from "@/lib/webauthn/config";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/cookies";
 import { createAuditLog, AuditAction } from "@/lib/audit/logger";
 
 export async function POST(request: NextRequest) {
   try {
+    ensureNativeWebCrypto();
     const body = await request.json();
     const { response, challengeSessionId } = body;
 
