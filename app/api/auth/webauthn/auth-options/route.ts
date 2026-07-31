@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       }
 
       allowCredentials = credentials.map((cred) => ({
-        id: Buffer.from(cred.credentialId, "base64url"),
+        id: new Uint8Array(Buffer.from(cred.credentialId, "base64url")),
         type: "public-key" as const,
         transports: cred.transports ? JSON.parse(cred.transports) : undefined,
       }));
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       }
 
       allowCredentials = allCredentials.map((cred) => ({
-        id: Buffer.from(cred.credentialId, "base64url"),
+        id: new Uint8Array(Buffer.from(cred.credentialId, "base64url")),
         type: "public-key" as const,
         transports: cred.transports ? JSON.parse(cred.transports) : undefined,
       }));
