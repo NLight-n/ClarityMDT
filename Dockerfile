@@ -3,8 +3,8 @@ FROM node:20-slim AS deps
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* ./
+# Copy package files and npm config
+COPY package.json package-lock.json* .npmrc* ./
 
 # Install dependencies
 RUN npm ci
