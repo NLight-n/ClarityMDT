@@ -12,9 +12,10 @@ export async function POST(request: NextRequest) {
     const { response, challengeSessionId } = body;
 
     const credentialId = response.id;
+    const rawId = response.rawId;
 
-    // 1. Find matching credential in database
-    const dbCredential = await prisma.webAuthnCredential.findUnique({
+    // 1. Find matching credential in database (checking id and rawId)
+    let dbCredential = await prisma.webAuthnCredential.findUnique({
       where: { credentialId },
       include: {
         user: {
@@ -23,8 +24,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    if (!dbCredential && rawId && rawId !== credentialId) {
+      dbCredential = await prisma.webAuthnCredential.findUnique({
+        where: { credentialId: rawId },
+        include: {
+          user: {
+            include: { department: true },
+          },
+        },
+      });
+    }
+
     if (!dbCredential || !dbCredential.user || !dbCredential.user.isActive) {
-      return NextResponse.json({ error: "Passkey credential not recognized or user deactivated." }, { status: 400 });
+      return NextResponse.json({ error: "Passkey credential not recognized for ClarityMDT or user deactivated." }, { status: 400 });
     }
 
     const user = dbCredential.user;

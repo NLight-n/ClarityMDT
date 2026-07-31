@@ -133,14 +133,44 @@ function RegisterPageContent() {
 
   if (!currentMeeting) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex flex-col items-center justify-center p-12 border rounded-lg">
-          <p className="text-muted-foreground">
-            No upcoming meetings found.
+      <div className="container mx-auto p-3 md:px-4 md:py-3">
+        {/* Mobile Header with Calendar Button */}
+        <div className="md:hidden flex items-center justify-between mb-4">
+          <h1 className="text-2xl font-bold">MDT Register</h1>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <CalendarIcon className="h-4 w-4" />
+                <span className="text-xs">Calendar</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-0" align="end">
+              <CalendarSidebar className="border-0 shadow-none" />
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        {/* Empty State Box */}
+        <div className="flex flex-col items-center justify-center p-8 md:p-12 border rounded-2xl bg-card text-center shadow-sm max-w-md mx-auto my-8">
+          <div className="p-3 rounded-full bg-primary/10 text-primary mb-3">
+            <CalendarIcon className="h-8 w-8" />
+          </div>
+          <h3 className="text-lg font-bold">No Upcoming Meetings Found</h3>
+          <p className="text-xs md:text-sm text-muted-foreground mt-1.5 mb-5 max-w-xs">
+            There are no future meetings scheduled. Use the calendar below to browse past meetings or select a specific date.
           </p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Open previous meetings by clicking on the calendar.
-          </p>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="default" size="sm" className="gap-2 px-4 shadow">
+                <CalendarIcon className="h-4 w-4" />
+                <span>Open Calendar</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[280px] p-0" align="center">
+              <CalendarSidebar className="border-0 shadow-none" />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     );
