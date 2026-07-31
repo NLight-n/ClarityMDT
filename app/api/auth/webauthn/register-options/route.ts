@@ -15,12 +15,13 @@ export async function POST(request: NextRequest) {
 
     const userCredentials = await prisma.webAuthnCredential.findMany({
       where: { userId: user.id },
-      select: { credentialId: true },
+      select: { credentialId: true, transports: true },
     });
 
     const excludeCredentials = userCredentials.map((cred) => ({
-      id: cred.credentialId,
-      transports: undefined,
+      id: new Uint8Array(Buffer.from(cred.credentialId, "base64url")),
+      type: "public-key" as const,
+      transports: cred.transports ? JSON.parse(cred.transports) : undefined,
     }));
 
     const options = await generateRegistrationOptions({

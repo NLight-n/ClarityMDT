@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
+      requireUserVerification: false,
       authenticator: {
         credentialID: new Uint8Array(Buffer.from(dbCredential.credentialId, "base64url")),
         credentialPublicKey: new Uint8Array(Buffer.from(dbCredential.publicKey, "base64url")),
@@ -67,7 +68,11 @@ export async function POST(request: NextRequest) {
     deleteWebAuthnChallenge(lookupId);
 
     if (!verification.verified || !verification.authenticationInfo) {
-      return NextResponse.json({ error: "Biometric authentication failed" }, { status: 400 });
+      console.error("WebAuthn verifyAuthenticationResponse returned verified: false", {
+        verification,
+        dbCredentialId: dbCredential.credentialId,
+      });
+      return NextResponse.json({ error: "Biometric authentication failed (signature verification mismatch)." }, { status: 400 });
     }
 
     // 3. Update counter in DB
