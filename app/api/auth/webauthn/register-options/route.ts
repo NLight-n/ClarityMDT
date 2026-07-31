@@ -18,9 +18,9 @@ export async function POST(request: NextRequest) {
       select: { credentialId: true, transports: true },
     });
 
+    // v13: excludeCredentials takes base64url string IDs directly (no Uint8Array, no type field)
     const excludeCredentials = userCredentials.map((cred) => ({
-      id: new Uint8Array(Buffer.from(cred.credentialId, "base64url")),
-      type: "public-key" as const,
+      id: cred.credentialId,
       transports: cred.transports ? JSON.parse(cred.transports) : undefined,
     }));
 

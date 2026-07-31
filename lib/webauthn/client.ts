@@ -37,7 +37,8 @@ export async function registerPasskey(friendlyName?: string) {
   const options = await optRes.json();
 
   // 2. Pass options to browser WebAuthn API
-  const registrationResponse = await startRegistration(options);
+  // v13: startRegistration now takes { optionsJSON } instead of options directly
+  const registrationResponse = await startRegistration({ optionsJSON: options });
 
   // 3. Verify registration on server
   const verifyRes = await fetch("/api/auth/webauthn/register-verify", {
@@ -70,7 +71,8 @@ export async function authenticateWithPasskey(loginId?: string) {
   const { options, challengeSessionId } = await optRes.json();
 
   // 2. Pass options to browser WebAuthn API
-  const authResponse = await startAuthentication(options);
+  // v13: startAuthentication now takes { optionsJSON } instead of options directly
+  const authResponse = await startAuthentication({ optionsJSON: options });
 
   // 3. Verify authentication on server
   const verifyRes = await fetch("/api/auth/webauthn/auth-verify", {

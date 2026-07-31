@@ -2,11 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyRegistrationResponse } from "@simplewebauthn/server";
 import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { prisma } from "@/lib/prisma";
-import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge, ensureNativeWebCrypto } from "@/lib/webauthn/config";
+import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge } from "@/lib/webauthn/config";
 
 export async function POST(request: NextRequest) {
   try {
-    ensureNativeWebCrypto();
     const user = await getCurrentUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,26 +31,24 @@ export async function POST(request: NextRequest) {
     deleteWebAuthnChallenge(user.id);
 
     if (verification.verified && verification.registrationInfo) {
-      const {
-        credentialID,
-        credentialPublicKey,
-        counter,
-        credentialDeviceType,
-        credentialBackedUp,
-      } = verification.registrationInfo;
+      // v13: registrationInfo.credential contains { id (base64url string), publicKey (Uint8Array), counter }
+      const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
 
-      const credentialIdStr = Buffer.from(credentialID).toString("base64url");
-      const publicKeyStr = Buffer.from(credentialPublicKey).toString("base64url");
+      const credentialIdStr = credential.id; // Already a base64url string in v13
+      const publicKeyStr = Buffer.from(credential.publicKey).toString("base64url");
 
       await prisma.webAuthnCredential.create({
         data: {
           userId: user.id,
           credentialId: credentialIdStr,
           publicKey: publicKeyStr,
-          counter: BigInt(counter),
+          counter: BigInt(credential.counter),
           deviceType: credentialDeviceType,
           backedUp: credentialBackedUp,
           friendlyName: friendlyName || "Biometric Passkey",
+          transports: response.response?.transports
+            ? JSON.stringify(response.response.transports)
+            : null,
         },
       });
 

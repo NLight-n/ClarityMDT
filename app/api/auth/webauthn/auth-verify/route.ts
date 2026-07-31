@@ -2,13 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import { encode } from "next-auth/jwt";
 import { prisma } from "@/lib/prisma";
-import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge, ensureNativeWebCrypto } from "@/lib/webauthn/config";
+import { getRelyingPartyConfig, getWebAuthnChallenge, deleteWebAuthnChallenge } from "@/lib/webauthn/config";
 import { SESSION_COOKIE_NAME } from "@/lib/auth/cookies";
 import { createAuditLog, AuditAction } from "@/lib/audit/logger";
 
 export async function POST(request: NextRequest) {
   try {
-    ensureNativeWebCrypto();
     const body = await request.json();
     const { response, challengeSessionId } = body;
 
@@ -51,15 +50,16 @@ export async function POST(request: NextRequest) {
     const { rpID, origin } = getRelyingPartyConfig(request);
 
     // 2. Verify WebAuthn response
+    // v13: uses `credential` (not `authenticator`) with { id: Base64URLString, publicKey: Uint8Array, counter: number }
     const verification = await verifyAuthenticationResponse({
       response,
       expectedChallenge,
       expectedOrigin: origin,
       expectedRPID: rpID,
       requireUserVerification: false,
-      authenticator: {
-        credentialID: new Uint8Array(Buffer.from(dbCredential.credentialId, "base64url")),
-        credentialPublicKey: new Uint8Array(Buffer.from(dbCredential.publicKey, "base64url")),
+      credential: {
+        id: dbCredential.credentialId,
+        publicKey: new Uint8Array(Buffer.from(dbCredential.publicKey, "base64url")),
         counter: Number(dbCredential.counter),
         transports: dbCredential.transports ? JSON.parse(dbCredential.transports) : undefined,
       },
