@@ -31,27 +31,30 @@ export async function POST(request: NextRequest) {
     deleteWebAuthnChallenge(user.id);
 
     if (verification.verified && verification.registrationInfo) {
-      const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
+      const {
+        credentialID,
+        credentialPublicKey,
+        counter,
+        credentialDeviceType,
+        credentialBackedUp,
+      } = verification.registrationInfo;
 
-      const credentialId = credential.id;
-      const publicKey = Buffer.from(credential.publicKey).toString("base64url");
-      const counter = credential.counter;
-      const transports = credential.transports ? JSON.stringify(credential.transports) : null;
+      const credentialIdStr = Buffer.from(credentialID).toString("base64url");
+      const publicKeyStr = Buffer.from(credentialPublicKey).toString("base64url");
 
       await prisma.webAuthnCredential.create({
         data: {
           userId: user.id,
-          credentialId,
-          publicKey,
+          credentialId: credentialIdStr,
+          publicKey: publicKeyStr,
           counter: BigInt(counter),
           deviceType: credentialDeviceType,
           backedUp: credentialBackedUp,
-          transports,
           friendlyName: friendlyName || "Biometric Passkey",
         },
       });
 
-      return NextResponse.json({ verified: true, credentialId });
+      return NextResponse.json({ verified: true, credentialId: credentialIdStr });
     }
 
     return NextResponse.json({ error: "Verification failed" }, { status: 400 });
