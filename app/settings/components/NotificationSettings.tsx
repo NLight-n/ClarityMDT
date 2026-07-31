@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Bell, Smartphone, MessageCircle, Share2, Check, CheckCheck, Trash2, Loader2, Send, MessageSquare, Trash } from "lucide-react";
+import { Bell, Smartphone, MessageCircle, Share2, Check, CheckCheck, Trash2, Loader2, Send, MessageSquare, Trash, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -127,6 +127,7 @@ export function NotificationSettings() {
   const [deletingBulk, setDeletingBulk] = useState(false);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
 
   // Message dialog state
   const [messageDialog, setMessageDialog] = useState<{
@@ -648,8 +649,64 @@ export function NotificationSettings() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+
+            {/* Test Push Notification Button */}
+            {channelPrefs.notifyWebPush && !loadingPrefs && (
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Test Web Push</p>
+                    <p className="text-xs text-muted-foreground">Send a test notification to this device to verify Web Push is working</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={testingPush}
+                    onClick={async () => {
+                      setTestingPush(true);
+                      try {
+                        const res = await fetch("/api/notifications/test-push", { method: "POST" });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                          setMessageDialog({
+                            open: true,
+                            type: "success",
+                            title: "Test Push Sent",
+                            message: `Push notification sent to ${data.sent} device(s). You should receive it shortly.${data.staleRemoved > 0 ? ` (${data.staleRemoved} expired subscription(s) removed)` : ""}`,
+                          });
+                        } else {
+                          setMessageDialog({
+                            open: true,
+                            type: "error",
+                            title: "Test Push Failed",
+                            message: data.error || "Failed to send test push notification.",
+                          });
+                        }
+                      } catch {
+                        setMessageDialog({
+                          open: true,
+                          type: "error",
+                          title: "Test Push Failed",
+                          message: "Network error. Could not reach the server.",
+                        });
+                      } finally {
+                        setTestingPush(false);
+                      }
+                    }}
+                    className="gap-1.5"
+                  >
+                    {testingPush ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Zap className="h-4 w-4" />
+                    )}
+                    {testingPush ? "Sending..." : "Send Test"}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
       {/* Action Buttons */}
       <div className="flex gap-4">

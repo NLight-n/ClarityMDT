@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
 
     const { rpID } = getRelyingPartyConfig(request);
 
-    let allowCredentials: { id: string; transports?: any[] }[] = [];
+    let allowCredentials: { id: Uint8Array; type: "public-key"; transports?: any[] }[] = [];
     let userId = "anon-webauthn";
 
     if (loginId && typeof loginId === "string" && loginId.trim()) {
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       }
 
       allowCredentials = credentials.map((cred) => ({
-        id: cred.credentialId,
+        id: Buffer.from(cred.credentialId, "base64url"),
         type: "public-key" as const,
         transports: cred.transports ? JSON.parse(cred.transports) : undefined,
       }));
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       }
 
       allowCredentials = allCredentials.map((cred) => ({
-        id: cred.credentialId,
+        id: Buffer.from(cred.credentialId, "base64url"),
         type: "public-key" as const,
         transports: cred.transports ? JSON.parse(cred.transports) : undefined,
       }));
