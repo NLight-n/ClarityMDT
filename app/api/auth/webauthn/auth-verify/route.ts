@@ -100,6 +100,7 @@ export async function POST(request: NextRequest) {
         name: user.name,
       },
       secret,
+      salt: SESSION_COOKIE_NAME,
       maxAge: maxAgeMinutes * 60,
     });
 
