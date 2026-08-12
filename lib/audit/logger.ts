@@ -25,6 +25,9 @@ export enum AuditAction {
   // DICOM operations
   DICOM_UPLOAD = "DICOM_UPLOAD",
   DICOM_DELETE = "DICOM_DELETE",
+  // Weasis operations
+  WEASIS_LAUNCH = "WEASIS_LAUNCH",
+  WEASIS_FILE_ACCESS = "WEASIS_FILE_ACCESS",
 }
 
 interface AuditLogData {

@@ -72,7 +72,7 @@ export function InstallBanner() {
             <span>Tap</span>
             <Share className="h-4 w-4 text-blue-400 inline mx-0.5" />
             <span>then select</span>
-            <span className="font-semibold text-white">"Add to Home Screen"</span>
+            <span className="font-semibold text-white">&quot;Add to Home Screen&quot;</span>
             <PlusSquare className="h-4 w-4 text-white inline mx-0.5" />
           </div>
         ) : null}

@@ -13,6 +13,7 @@ import { CaseStatus } from "@prisma/client";
 import { format } from "date-fns";
 import { useAlertContext } from "@/contexts/AlertContext";
 import { FileViewerModal } from "./FileViewerModal";
+import { OpenInWeasisButton } from "./OpenInWeasisButton";
 
 // File validation constants (matching API route)
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -482,24 +483,27 @@ export function AttachmentManager({
                         </TooltipContent>
                       </Tooltip>
                       {attachment.isDicomBundle && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="default"
-                              size="icon"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(`/ohif-viewer/viewer?url=/api/dicom-manifest/${attachment.id}`, "_blank");
-                              }}
-                              className="h-7 w-7 bg-blue-600 hover:bg-blue-700"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Open in OHIF Viewer</p>
-                          </TooltipContent>
-                        </Tooltip>
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="default"
+                                size="icon"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(`/ohif-viewer/viewer?url=/api/dicom-manifest/${attachment.id}`, "_blank");
+                                }}
+                                className="h-7 w-7 bg-blue-600 hover:bg-blue-700"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Open in OHIF Viewer</p>
+                            </TooltipContent>
+                          </Tooltip>
+                          <OpenInWeasisButton attachmentId={attachment.id} variant="icon" />
+                        </>
                       )}
                       {isEditing && (
                         <Tooltip>

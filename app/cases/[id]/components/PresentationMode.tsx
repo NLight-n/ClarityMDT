@@ -7,6 +7,7 @@ import { RichTextEditor } from "@/components/editors/RichTextEditor";
 import { format } from "date-fns";
 import { FileViewerModal } from "./FileViewerModal";
 import { FileIcon, defaultStyles } from "react-file-icon";
+import { OpenInWeasisButton } from "./OpenInWeasisButton";
 
 interface PresentationModeProps {
   caseData: any;
@@ -201,13 +202,14 @@ export function PresentationMode({ caseData, onClose }: PresentationModeProps) {
             <h2 className="text-xl font-bold mb-4 pb-2 border-b border-border/50">DICOM & Imaging Links</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {dicomBundles.map((bundle: any) => (
-                <div key={bundle.id} className="flex items-center p-3 rounded-lg border border-border/50 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer" onClick={() => handleOpenOHIF(`/ohif-viewer/viewer?url=/api/dicom-manifest/${bundle.id}`)}>
-                  <Folder className="h-10 w-10 text-blue-600 mr-4 flex-shrink-0" />
-                  <div className="flex-1 overflow-hidden">
+                <div key={bundle.id} className="flex items-center p-3 rounded-lg border border-border/50 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+                  <Folder className="h-10 w-10 text-blue-600 mr-4 flex-shrink-0 cursor-pointer" onClick={() => handleOpenOHIF(`/ohif-viewer/viewer?url=/api/dicom-manifest/${bundle.id}`)} />
+                  <div className="flex-1 overflow-hidden cursor-pointer" onClick={() => handleOpenOHIF(`/ohif-viewer/viewer?url=/api/dicom-manifest/${bundle.id}`)}>
                     <p className="font-semibold truncate text-base">{bundle.fileName.replace("_manifest.json", "")}</p>
                     <p className={`text-sm ${textMutedClass}`}>DICOM Local Upload</p>
                   </div>
-                  <Button size="sm" variant="secondary" className="ml-2">Open OHIF</Button>
+                  <Button size="sm" variant="secondary" className="ml-2" onClick={() => handleOpenOHIF(`/ohif-viewer/viewer?url=/api/dicom-manifest/${bundle.id}`)}>Open OHIF</Button>
+                  <OpenInWeasisButton attachmentId={bundle.id} variant="cardAction" size="sm" className="ml-2" />
                 </div>
               ))}
               {webLinks.map((link: any, index: number) => (

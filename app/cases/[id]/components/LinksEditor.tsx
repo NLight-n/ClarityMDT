@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { parseDicomFiles } from "@/lib/dicom/parser";
 import { useAlertContext } from "@/contexts/AlertContext";
+import { OpenInWeasisButton } from "./OpenInWeasisButton";
 
 interface Link {
   label: string;
@@ -584,6 +585,7 @@ export function LinksEditor({
                     >
                       <Eye className="h-4 w-4 mr-1.5" /> Open in OHIF
                     </Button>
+                    <OpenInWeasisButton attachmentId={bundle.id} variant="button" size="sm" className="ml-2 h-8 text-xs font-medium" />
                   </div>
                   {canEdit && isEditingMode && (
                     <Button
