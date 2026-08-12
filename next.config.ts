@@ -190,6 +190,35 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // OHIF still loads some worker/chunk assets from root-level rewritten URLs.
+        // Those responses must also be embeddable by the isolated viewer document.
+        source: "/:path(.*bundle.*.js)",
+        headers: [
+          {
+            key: "Cross-Origin-Embedder-Policy",
+            value: "require-corp",
+          },
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "same-origin",
+          },
+        ],
+      },
+      {
+        // Decoder/processing WASM files can also be resolved via the root-level rewrite.
+        source: "/:path(.*.wasm)",
+        headers: [
+          {
+            key: "Cross-Origin-Embedder-Policy",
+            value: "require-corp",
+          },
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "same-origin",
+          },
+        ],
+      },
+      {
         // Additional headers for API routes
         source: "/api/:path*",
         headers: [
