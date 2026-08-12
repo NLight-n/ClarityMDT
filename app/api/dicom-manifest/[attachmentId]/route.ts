@@ -4,6 +4,17 @@ import { canViewCase } from "@/lib/permissions/accessControl";
 import { prisma } from "@/lib/prisma";
 import { getFileStream, generateInternalPresignedUrls } from "@/lib/minio";
 
+function getPublicOrigin(request: NextRequest) {
+  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
+
+  if (forwardedProto && forwardedHost && ["http", "https"].includes(forwardedProto)) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  return request.nextUrl.origin;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ attachmentId: string }> }
@@ -169,7 +180,11 @@ export async function GET(
       urlMap = await generateInternalPresignedUrls(Array.from(storageKeys), 43200); 
     }
 
-    // 4. Update the manifest with the generated secure URLs
+    // 4. Update the manifest with same-origin image URLs. OHIF strips the
+    // `wadouri:` scheme before issuing the XHR, so use the public origin from
+    // the reverse proxy instead of leaving the viewer to resolve a relative
+    // URL from /ohif-viewer/.
+    const publicOrigin = getPublicOrigin(request);
     if (manifest.studies && Array.isArray(manifest.studies)) {
       for (const study of manifest.studies) {
         if (study.series && Array.isArray(study.series)) {
@@ -177,8 +192,9 @@ export async function GET(
             if (series.instances && Array.isArray(series.instances)) {
               for (const instance of series.instances) {
                 if (instance.url && urlMap[instance.url]) {
-                  const proxyUrl = `/api/dicom-proxy?url=${encodeURIComponent(urlMap[instance.url])}`;
-                  instance.url = `wadouri:${proxyUrl}`;
+                  const proxyUrl = new URL("/api/dicom-proxy", publicOrigin);
+                  proxyUrl.searchParams.set("url", urlMap[instance.url]);
+                  instance.url = `wadouri:${proxyUrl.toString()}`;
                 }
               }
             }

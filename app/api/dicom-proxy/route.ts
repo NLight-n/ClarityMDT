@@ -58,6 +58,10 @@ export async function GET(request: NextRequest) {
         "Content-Type": response.headers.get("content-type") || "application/octet-stream",
         "Content-Length": fileBuffer.byteLength.toString(),
         "Cache-Control": "private, max-age=86400",
+        // The OHIF document is cross-origin isolated for MPR/WebAssembly.
+        // Mark the same-origin DICOM response as embeddable by that document.
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "Content-Disposition": "inline",
         // Expose headers for cornerstone
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Expose-Headers": "Content-Length, Content-Type",
