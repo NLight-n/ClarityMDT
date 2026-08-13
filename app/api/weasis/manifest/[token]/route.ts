@@ -3,17 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getFileStream } from "@/lib/minio";
 import { verifyWeasisToken, markManifestTokenConsumed } from "@/lib/weasis/tokens";
 import { convertToWeasisXml } from "@/lib/weasis/manifestConverter";
-
-function getPublicOrigin(request: NextRequest): string {
-  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-
-  if (forwardedProto && forwardedHost && ["http", "https"].includes(forwardedProto)) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  return request.nextUrl.origin;
-}
+import { getPublicOrigin } from "@/lib/weasis/getPublicOrigin";
 
 export async function GET(
   request: NextRequest,

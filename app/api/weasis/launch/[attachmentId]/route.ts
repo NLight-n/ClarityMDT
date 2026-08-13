@@ -3,18 +3,8 @@ import { getCurrentUserFromRequest } from "@/lib/auth/getCurrentUser";
 import { canViewCase } from "@/lib/permissions/accessControl";
 import { prisma } from "@/lib/prisma";
 import { generateWeasisToken } from "@/lib/weasis/tokens";
+import { getPublicOrigin } from "@/lib/weasis/getPublicOrigin";
 import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
-
-function getPublicOrigin(request: NextRequest): string {
-  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-
-  if (forwardedProto && forwardedHost && ["http", "https"].includes(forwardedProto)) {
-    return `${forwardedProto}://${forwardedHost}`;
-  }
-
-  return request.nextUrl.origin;
-}
 
 export async function GET(
   request: NextRequest,
