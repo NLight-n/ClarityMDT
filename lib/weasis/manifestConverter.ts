@@ -113,8 +113,10 @@ export function convertToWeasisXml(
 ): string {
   const studies = manifestJson?.studies || [];
 
+  const baseUrl = `${publicOrigin.replace(/\/+$/, "")}/api/weasis/file/${token}/`;
+
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-  xml += `<wado_query xmlns="http://www.weasis.org/xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" wadoURL="" requireOnlyModel="false">\n`;
+  xml += `<wado_query xmlns="http://www.weasis.org/xsd" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" wadoURL="${escapeXml(baseUrl)}" requireOnlyModel="false">\n`;
 
   for (const study of studies) {
     // Attempt to resolve Patient info from study or first instance metadata
@@ -153,9 +155,9 @@ export function convertToWeasisXml(
         if (!storageKey) continue;
 
         const fileId = encodeFileId(storageKey);
-        const fileDownloadUrl = `${publicOrigin}/api/weasis/file/${token}/${fileId}`;
+        const fileDownloadUrl = `${baseUrl}${fileId}`;
 
-        xml += `        <Instance SOPInstanceUID="${escapeXml(sopInstanceUID)}" InstanceNumber="${escapeXml(instanceNum)}" DirectDownloadFile="${escapeXml(fileDownloadUrl)}"`;
+        xml += `        <Instance SOPInstanceUID="${escapeXml(sopInstanceUID)}" InstanceNumber="${escapeXml(instanceNum)}" DirectDownloadFile="${escapeXml(fileId)}" DirectDownloadFileUrl="${escapeXml(fileDownloadUrl)}"`;
         if (sopClassUID) {
           xml += ` SOPClassUID="${escapeXml(sopClassUID)}"`;
         }

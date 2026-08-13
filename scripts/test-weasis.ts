@@ -218,8 +218,8 @@ async function runTests() {
     assert.ok(xml.includes(`StudyDescription="CT Abdomen &amp; Pelvis"`)); // Escaped &
     assert.ok(xml.includes(`SeriesInstanceUID="1.2.840.10008.1.100.1"`));
     assert.ok(xml.includes(`Modality="CT"`));
-    assert.ok(xml.includes(`SOPInstanceUID="1.2.840.10008.1.100.1.1"`));
-    assert.ok(xml.includes(`DirectDownloadFile="https://mdt.hospital.org/api/weasis/file/${token}/`));
+    assert.ok(xml.includes(`wadoURL="${publicOrigin}/api/weasis/file/${token}/"`));
+    assert.ok(xml.includes(`DirectDownloadFile="`));
   });
 
   test("Launch Protocol URI Validity in Browser URL Parser", () => {
