@@ -23,6 +23,8 @@ const ALLOWED_FILE_TYPES = [
   "image/jpg",
   "image/png",
   "image/gif",
+  "image/webp",
+  "image/svg+xml",
   // PDF
   "application/pdf",
   // Word documents
@@ -34,6 +36,22 @@ const ALLOWED_FILE_TYPES = [
   // PowerPoint documents
   "application/vnd.ms-powerpoint", // .ppt
   "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  // Text & Data
+  "text/plain",
+  "text/csv",
+  // JSON (for DICOM manifests)
+  "application/json",
+];
+
+const ALLOWED_EXTENSIONS = [
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
+  ".pdf",
+  ".doc", ".docx",
+  ".xls", ".xlsx",
+  ".ppt", ".pptx",
+  ".txt", ".csv",
+  ".json",
+  ".dcm",
 ];
 
 interface Attachment {
@@ -166,13 +184,16 @@ export function AttachmentManager({
     }
 
     // Validate file type
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+    const ext = "." + file.name.split(".").pop()?.toLowerCase();
+    const isTypeAllowed = ALLOWED_FILE_TYPES.includes(file.type) || ALLOWED_EXTENSIONS.includes(ext);
+    if (!isTypeAllowed) {
       const allowedTypes = [
-        "Images (JPEG, PNG, GIF)",
+        "Images (JPEG, PNG, GIF, WebP)",
         "PDF",
         "Word documents (.doc, .docx)",
         "Excel documents (.xls, .xlsx)",
         "PowerPoint documents (.ppt, .pptx)",
+        "Text / CSV (.txt, .csv)",
       ].join(", ");
       return `File type not supported for "${file.name}". Allowed types: ${allowedTypes}`;
     }

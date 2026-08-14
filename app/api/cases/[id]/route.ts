@@ -10,21 +10,21 @@ import { encryptCaseData, decryptCaseData } from "@/lib/security/phiCaseWrapper"
 import { getObjectsSizeByPrefix } from "@/lib/minio/delete";
 
 const updateCaseSchema = z.object({
-  patientName: z.string().min(1).optional(),
-  mrn: z.string().optional(),
-  age: z.number().int().positive().optional(),
+  patientName: z.string().min(1, "Patient name cannot be empty").optional(),
+  mrn: z.string().nullable().optional(),
+  age: z.number().int().nonnegative().optional(),
   gender: z.nativeEnum(Gender).optional(),
-  presentingDepartmentId: z.string().optional(),
+  presentingDepartmentId: z.string().nullable().optional(),
   clinicalDetails: z.any().optional(), // JSON field
   radiologyFindings: z.any().optional(), // JSON field
   pathologyFindings: z.any().optional(), // JSON field
-  diagnosisStage: z.string().optional(),
-  treatmentPlan: z.string().optional(),
-  question: z.string().optional(),
-  concernedDepartmentIds: z.array(z.string()).optional(),
+  diagnosisStage: z.string().nullable().optional(),
+  treatmentPlan: z.string().nullable().optional(),
+  question: z.string().nullable().optional(),
+  concernedDepartmentIds: z.array(z.string()).nullable().optional(),
   assignedMeetingId: z.string().nullable().optional(),
-  links: z.array(z.object({ label: z.string(), url: z.string().url() })).optional(),
-  followUp: z.string().optional(),
+  links: z.array(z.object({ label: z.string(), url: z.string() })).nullable().optional(),
+  followUp: z.string().nullable().optional(),
 });
 
 /**
@@ -301,7 +301,7 @@ export async function PATCH(
       }
     }
 
-    if (validatedData.concernedDepartmentIds !== undefined) {
+    if (validatedData.concernedDepartmentIds !== undefined && validatedData.concernedDepartmentIds !== null) {
       const uniqueIds = Array.from(new Set(validatedData.concernedDepartmentIds));
       if (uniqueIds.length > 0) {
         const existingDepartments = await prisma.department.findMany({
@@ -429,7 +429,9 @@ export async function PATCH(
       const oldIds: string[] = Array.isArray((existingCase as any).concernedDepartmentIds)
         ? (existingCase as any).concernedDepartmentIds
         : [];
-      const newIds: string[] = validatedData.concernedDepartmentIds;
+      const newIds: string[] = Array.isArray(validatedData.concernedDepartmentIds)
+        ? validatedData.concernedDepartmentIds
+        : [];
       const oldStr = JSON.stringify(oldIds);
       const newStr = JSON.stringify(newIds);
 
@@ -576,8 +578,9 @@ export async function PATCH(
     return NextResponse.json(updatedCase);
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const errorMsg = error.issues.map(i => `${i.path.join('.') || 'field'}: ${i.message}`).join(', ');
       return NextResponse.json(
-        { error: "Validation error", details: error.issues },
+        { error: `Validation error: ${errorMsg}`, details: error.issues },
         { status: 400 }
       );
     }

@@ -4,7 +4,6 @@ import { canEditCase } from "@/lib/permissions/accessControl";
 import { prisma } from "@/lib/prisma";
 import { uploadFile, generateCaseAttachmentKey } from "@/lib/minio";
 import { createAuditLog, AuditAction, getIpAddress } from "@/lib/audit/logger";
-import { z } from "zod";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_FILE_TYPES = [
@@ -13,6 +12,8 @@ const ALLOWED_FILE_TYPES = [
   "image/jpg",
   "image/png",
   "image/gif",
+  "image/webp",
+  "image/svg+xml",
   // PDF
   "application/pdf",
   // Word documents
@@ -24,9 +25,29 @@ const ALLOWED_FILE_TYPES = [
   // PowerPoint documents
   "application/vnd.ms-powerpoint", // .ppt
   "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  // Text & Data
+  "text/plain",
+  "text/csv",
   // JSON (for DICOM manifests)
   "application/json",
 ];
+
+const ALLOWED_EXTENSIONS = [
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
+  ".pdf",
+  ".doc", ".docx",
+  ".xls", ".xlsx",
+  ".ppt", ".pptx",
+  ".txt", ".csv",
+  ".json",
+  ".dcm",
+];
+
+function isAllowedFileType(file: { type: string; name: string }): boolean {
+  if (ALLOWED_FILE_TYPES.includes(file.type)) return true;
+  const ext = "." + file.name.split(".").pop()?.toLowerCase();
+  return ALLOWED_EXTENSIONS.includes(ext);
+}
 
 /**
  * POST /api/attachments/upload/[caseId] - Upload a file attachment for a case
@@ -83,9 +104,9 @@ export async function POST(
     }
 
     // Validate file type
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+    if (!isAllowedFileType(file)) {
       return NextResponse.json(
-        { error: `File type not allowed. Allowed types: ${ALLOWED_FILE_TYPES.join(", ")}` },
+        { error: `File type not allowed for "${file.name}". Allowed formats: PDF, Images, Word, Excel, PowerPoint, Text, JSON` },
         { status: 400 }
       );
     }
@@ -99,7 +120,7 @@ export async function POST(
 
     // Upload to MinIO
     await uploadFile(fileBuffer, storageKey, {
-      contentType: file.type,
+      contentType: file.type || "application/octet-stream",
       metadata: {
         originalFileName: file.name,
         uploadedBy: currentUser.id,
@@ -112,7 +133,7 @@ export async function POST(
       data: {
         caseId: caseId,
         fileName: file.name,
-        fileType: file.type,
+        fileType: file.type || "application/octet-stream",
         fileSize: file.size,
         storageKey: storageKey,
         isDicomBundle: isDicomBundle,
@@ -155,5 +176,3 @@ export async function POST(
     );
   }
 }
-
-

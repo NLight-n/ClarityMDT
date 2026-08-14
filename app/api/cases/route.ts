@@ -8,18 +8,18 @@ import { encryptCaseData, decryptCaseDataArray } from "@/lib/security/phiCaseWra
 
 const createCaseSchema = z.object({
   patientName: z.string().min(1, "Patient name is required"),
-  mrn: z.string().optional(),
-  age: z.number().int().positive("Age must be a positive number"),
+  mrn: z.string().nullable().optional(),
+  age: z.number().int().nonnegative("Age must be a non-negative number"),
   gender: z.nativeEnum(Gender),
   presentingDepartmentId: z.string().min(1, "Presenting department is required"),
   clinicalDetails: z.any(), // JSON field (ProseMirror format)
   radiologyFindings: z.any().optional(), // JSON field
   pathologyFindings: z.any().optional(), // JSON field
   diagnosisStage: z.string().min(1, "Diagnosis stage is required"),
-  treatmentPlan: z.string().optional(),
+  treatmentPlan: z.string().nullable().optional(),
   question: z.string().min(1, "Discussion question is required"),
   concernedDepartmentIds: z.array(z.string()).optional(),
-  links: z.array(z.object({ label: z.string(), url: z.string().url() })).optional(),
+  links: z.array(z.object({ label: z.string(), url: z.string() })).nullable().optional(),
 });
 
 /**
@@ -298,8 +298,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(newCase, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      const errorMsg = error.issues.map(i => `${i.path.join('.') || 'field'}: ${i.message}`).join(', ');
       return NextResponse.json(
-        { error: "Validation error", details: error.issues },
+        { error: `Validation error: ${errorMsg}`, details: error.issues },
         { status: 400 }
       );
     }
