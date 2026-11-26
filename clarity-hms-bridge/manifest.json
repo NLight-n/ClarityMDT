@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "ClarityMDT - InstaHMS Bridge",
+  "version": "0.1.0",
+  "description": "Bridges basic patient demographics (MRN, Name, Age, Gender) from InstaHMS into ClarityMDT.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://192.168.10.12/instahms/*",
+    "https://192.168.11.143/*",
+    "http://localhost:3000/*"
+  ],
+  "icons": {
+    "48": "icons/icon-192.png",
+    "96": "icons/icon-192.png",
+    "192": "icons/icon-192.png"
+  },
+  "action": {
+    "default_title": "Send patient to ClarityMDT",
+    "default_icon": {
+      "16": "icons/icon.svg",
+      "32": "icons/icon.svg",
+      "48": "icons/icon-192.png"
+    }
+  },
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://192.168.10.12/instahms/emr/EMRMainDisplay.do*"
+      ],
+      "js": [
+        "parser.js",
+        "hms-content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://192.168.11.143/cases/new*",
+        "http://localhost:3000/cases/new*"
+      ],
+      "js": [
+        "parser.js",
+        "clarity-content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "clarity-hms-bridge@claritymdt.local",
+      "strict_min_version": "128.0"
+    }
+  }
+}

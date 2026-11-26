@@ -87,6 +87,49 @@ export default function NewCasePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCreateCase, router]);
 
+  useEffect(() => {
+    const normalizeGender = (raw?: string): Gender | "" => {
+      const val = raw?.trim().toLowerCase();
+      if (val === "m" || val === "male") return Gender.Male;
+      if (val === "f" || val === "female") return Gender.Female;
+      if (val === "o" || val === "other") return Gender.Other;
+      return "";
+    };
+
+    const handlePrefillMessage = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) {
+        return;
+      }
+      if (event.data?.type !== "CLARITY_MDT_PREFILL" || !event.data?.payload) {
+        return;
+      }
+
+      const payload = event.data.payload as {
+        patientName?: string;
+        mrn?: string;
+        age?: string | number;
+        gender?: string;
+      };
+
+      const parsedGender = normalizeGender(payload.gender);
+      const parsedAge =
+        payload.age !== undefined && payload.age !== null
+          ? String(payload.age).replace(/[^\d]/g, "")
+          : "";
+
+      setFormData((prev) => ({
+        ...prev,
+        ...(payload.patientName?.trim() ? { patientName: payload.patientName.trim() } : {}),
+        ...(payload.mrn?.trim() ? { mrn: payload.mrn.trim() } : {}),
+        ...(parsedAge ? { age: parsedAge } : {}),
+        ...(parsedGender ? { gender: parsedGender } : {}),
+      }));
+    };
+
+    window.addEventListener("message", handlePrefillMessage);
+    return () => window.removeEventListener("message", handlePrefillMessage);
+  }, []);
+
   const loadDepartments = async () => {
     try {
       const response = await fetch("/api/departments");
