@@ -89,10 +89,30 @@ extApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         const html = await res.text();
         sendResponse({ ok: true, html });
       } catch (err) {
+        // Fallback: if background fetch is blocked (e.g. HTTPS-Only Mode), ask an open InstaHMS tab
+        try {
+          const hmsTabs = await extApi.tabs.query({
+            url: "http://192.168.10.12/instahms/*",
+          });
+          for (const hmsTab of hmsTabs) {
+            if (!hmsTab.id) continue;
+            const tabRes = await extApi.tabs.sendMessage(hmsTab.id, {
+              type: "FETCH_PATIENT_SAME_ORIGIN",
+              mrn,
+            });
+            if (tabRes) {
+              sendResponse(tabRes);
+              return;
+            }
+          }
+        } catch (_fallbackErr) {
+          // Ignore fallback errors and report original network error
+        }
+
         sendResponse({
           ok: false,
           error: "NETWORK_ERROR",
-          detail: err ? String(err.message || err) : "Unknown error",
+          detail: `${err ? String(err.message || err) : "Unknown error"} (check HTTPS-Only Mode or keep an InstaHMS tab open)`,
         });
       }
     })();

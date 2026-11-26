@@ -39,7 +39,7 @@ interface Department {
 
 export default function NewCasePage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -78,6 +78,8 @@ export default function NewCasePage() {
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
+    if (status === "loading") return;
+
     if (!canCreateCase) {
       router.push("/cases");
       return;
@@ -85,7 +87,7 @@ export default function NewCasePage() {
 
     loadDepartments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canCreateCase, router]);
+  }, [status, canCreateCase, router]);
 
   useEffect(() => {
     const normalizeGender = (raw?: string): Gender | "" => {

@@ -32,7 +32,7 @@
   "content_scripts": [
     {
       "matches": [
-        "http://192.168.10.12/instahms/emr/EMRMainDisplay.do*"
+        "http://192.168.10.12/instahms/*"
       ],
       "js": [
         "parser.js",
