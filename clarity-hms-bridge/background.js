@@ -6,6 +6,7 @@ const INSTAHMS_EMR_URL =
   "http://192.168.10.12/instahms/emr/EMRMainDisplay.do?_method=list&mr_no=";
 
 const CLARITY_BASE_URL = "https://192.168.11.143";
+let inMemoryPrefill = null;
 
 function flashBadge(tabId, text, color) {
   if (!extApi.action || !tabId) return;
@@ -17,7 +18,14 @@ function flashBadge(tabId, text, color) {
 }
 
 async function openClarityWithPrefill(payload) {
-  await extApi.storage.session.set({ pendingHmsPrefill: payload });
+  inMemoryPrefill = payload;
+  try {
+    if (extApi.storage && extApi.storage.session) {
+      await extApi.storage.session.set({ pendingHmsPrefill: payload });
+    }
+  } catch (_err) {
+    // inMemoryPrefill remains available as fallback
+  }
   await extApi.tabs.create({
     url: `${CLARITY_BASE_URL}/cases/new?fromHms=1`,
   });
@@ -49,6 +57,29 @@ if (extApi.action && extApi.action.onClicked) {
 
 extApi.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (!message || !message.type) return false;
+
+  if (message.type === "CONSUME_PENDING_PREFILL") {
+    (async () => {
+      let payload = inMemoryPrefill;
+      inMemoryPrefill = null;
+
+      try {
+        if (extApi.storage && extApi.storage.session) {
+          const data = await extApi.storage.session.get("pendingHmsPrefill");
+          if (data && data.pendingHmsPrefill) {
+            payload = data.pendingHmsPrefill;
+          }
+          await extApi.storage.session.remove("pendingHmsPrefill");
+        }
+      } catch (_err) {
+        // Ignore storage errors if inMemoryPrefill already captured it
+      }
+
+      sendResponse({ ok: Boolean(payload), payload: payload || null });
+    })();
+
+    return true;
+  }
 
   if (message.type === "FETCH_PATIENT_BY_MRN") {
     const mrn = String(message.mrn || "").trim();

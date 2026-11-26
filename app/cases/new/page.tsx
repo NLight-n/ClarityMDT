@@ -413,6 +413,21 @@ export default function NewCasePage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
+                <Label htmlFor="mrn">MRN (Medical Record Number)</Label>
+                <div id="mrn-input-row" className="flex items-center gap-2">
+                  <Input
+                    id="mrn"
+                    className="flex-1 min-w-0"
+                    value={formData.mrn}
+                    onChange={(e) =>
+                      setFormData({ ...formData, mrn: e.target.value })
+                    }
+                    disabled={submitting}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="patientName">Patient Name *</Label>
                 <Input
                   id="patientName"
@@ -421,18 +436,6 @@ export default function NewCasePage() {
                     setFormData({ ...formData, patientName: e.target.value })
                   }
                   required
-                  disabled={submitting}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="mrn">MRN (Medical Record Number)</Label>
-                <Input
-                  id="mrn"
-                  value={formData.mrn}
-                  onChange={(e) =>
-                    setFormData({ ...formData, mrn: e.target.value })
-                  }
                   disabled={submitting}
                 />
               </div>

@@ -16,6 +16,7 @@ import { Backup } from "./components/Backup";
 import { NotificationSettings } from "./components/NotificationSettings";
 import { StorageManagement } from "./components/StorageManagement";
 import { About } from "./components/About";
+import { BrowserExtensionSettings } from "./components/BrowserExtensionSettings";
 import { PrismaStudio } from "./components/PrismaStudio";
 import { isAdmin, isCoordinator } from "@/lib/permissions/client";
 
@@ -47,7 +48,7 @@ export function SettingsPageClient() {
 
   // Validate tab access and redirect if needed
   useEffect(() => {
-    const validTabs = ["profile", "notifications", "about"];
+    const validTabs = ["profile", "notifications", "extension", "about"];
     if (isUserAdmin) {
       validTabs.push("users", "admin", "audit", "backup", "storage");
     }
@@ -74,6 +75,7 @@ export function SettingsPageClient() {
         <TabsList className="inline-flex h-auto w-full lg:w-auto flex-nowrap justify-start overflow-x-auto scrollbar-hide gap-0.5 p-1">
           <TabsTrigger value="profile">User Profile</TabsTrigger>
           <TabsTrigger value="notifications">Notifications</TabsTrigger>
+          <TabsTrigger value="extension">HMS Extension</TabsTrigger>
           <TabsTrigger value="about">About</TabsTrigger>
           {(isUserAdmin || isUserCoordinator) && <TabsTrigger value="users">User Management</TabsTrigger>}
           {isUserCoordinator && <TabsTrigger value="departments">Department Management</TabsTrigger>}
@@ -89,6 +91,10 @@ export function SettingsPageClient() {
 
         <TabsContent value="notifications" className="mt-6">
           <NotificationSettings />
+        </TabsContent>
+
+        <TabsContent value="extension" className="mt-6">
+          <BrowserExtensionSettings />
         </TabsContent>
 
         <TabsContent value="about" className="mt-6">

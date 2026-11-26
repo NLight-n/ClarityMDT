@@ -17,36 +17,36 @@
 
   async function consumePendingPushPrefill() {
     try {
-      const data = await extApi.storage.session.get("pendingHmsPrefill");
-      if (data && data.pendingHmsPrefill) {
-        const payload = data.pendingHmsPrefill;
-        await extApi.storage.session.remove("pendingHmsPrefill");
-        postPrefillToPage(payload);
+      const res = await extApi.runtime.sendMessage({
+        type: "CONSUME_PENDING_PREFILL",
+      });
+      if (res && res.ok && res.payload) {
+        requestAnimationFrame(() => {
+          postPrefillToPage(res.payload);
+        });
       }
     } catch (_err) {
-      // Ignore if session storage is unavailable
+      // Ignore if no pending prefill
     }
   }
 
   function attachFetchButton() {
+    if (!window.location.pathname.startsWith("/cases/new")) return;
+
     const mrnInput = document.getElementById("mrn");
     if (!mrnInput || mrnInput.dataset.hmsBridgeAttached === "true") return;
 
     mrnInput.dataset.hmsBridgeAttached = "true";
-
-    const wrapper = document.createElement("div");
-    wrapper.style.cssText =
-      "display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap;";
 
     const btn = document.createElement("button");
     btn.id = "clarity-fetch-hms-btn";
     btn.type = "button";
     btn.textContent = "Fetch from HMS";
     btn.style.cssText =
-      "background:#0f766e;color:#ffffff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;font-weight:500;";
+      "background:#0f766e;color:#ffffff;border:none;border-radius:6px;padding:0 12px;height:36px;cursor:pointer;font-size:12px;font-weight:500;white-space:nowrap;flex-shrink:0;";
 
-    const status = document.createElement("span");
-    status.style.cssText = "font-size:12px;color:#64748b;";
+    const status = document.createElement("div");
+    status.style.cssText = "font-size:12px;color:#64748b;margin-top:4px;";
 
     btn.addEventListener("click", async () => {
       const mrn = mrnInput.value.trim();
@@ -105,9 +105,14 @@
       }
     });
 
-    wrapper.appendChild(btn);
-    wrapper.appendChild(status);
-    mrnInput.insertAdjacentElement("afterend", wrapper);
+    const mrnRow = document.getElementById("mrn-input-row");
+    if (mrnRow) {
+      mrnRow.appendChild(btn);
+      mrnRow.insertAdjacentElement("afterend", status);
+    } else {
+      mrnInput.insertAdjacentElement("afterend", btn);
+      btn.insertAdjacentElement("afterend", status);
+    }
 
     // Once #mrn is mounted, the React listener is also mounted — safe to replay Push payload
     consumePendingPushPrefill();

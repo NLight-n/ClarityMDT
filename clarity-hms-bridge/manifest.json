@@ -12,8 +12,8 @@
     "http://localhost:3000/*"
   ],
   "icons": {
-    "48": "icons/icon-192.png",
-    "96": "icons/icon-192.png",
+    "48": "icons/icon.svg",
+    "96": "icons/icon.svg",
     "192": "icons/icon-192.png"
   },
   "action": {
@@ -21,7 +21,7 @@
     "default_icon": {
       "16": "icons/icon.svg",
       "32": "icons/icon.svg",
-      "48": "icons/icon-192.png"
+      "48": "icons/icon.svg"
     }
   },
   "background": {
@@ -43,8 +43,8 @@
     },
     {
       "matches": [
-        "https://192.168.11.143/cases/new*",
-        "http://localhost:3000/cases/new*"
+        "https://192.168.11.143/*",
+        "http://localhost:3000/*"
       ],
       "js": [
         "parser.js",
@@ -56,7 +56,12 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "clarity-hms-bridge@claritymdt.local",
-      "strict_min_version": "128.0"
+      "strict_min_version": "128.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
     }
   }
 }
