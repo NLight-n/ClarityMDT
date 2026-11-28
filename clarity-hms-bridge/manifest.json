@@ -1,13 +1,16 @@
 {
   "manifest_version": 3,
   "name": "ClarityMDT - InstaHMS Bridge",
-  "version": "0.1.0",
-  "description": "Bridges basic patient demographics (MRN, Name, Age, Gender) from InstaHMS into ClarityMDT.",
+  "version": "0.1.3",
+  "description": "Bridges basic patient demographics (MRN, Name, Age, Gender) from InstaHMS into ClarityMDT/IRLog and opens Medsynapse PACS studies.",
   "permissions": [
-    "storage"
+    "storage",
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "http://192.168.10.12/instahms/*",
+    "http://192.168.10.222/*",
     "https://192.168.11.143/*",
     "http://localhost:3000/*"
   ],
@@ -17,12 +20,16 @@
     "192": "icons/icon-192.png"
   },
   "action": {
-    "default_title": "Send patient to ClarityMDT",
+    "default_title": "Send patient from InstaHMS",
     "default_icon": {
       "16": "icons/icon.svg",
       "32": "icons/icon.svg",
       "48": "icons/icon.svg"
     }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
   },
   "background": {
     "scripts": [
@@ -49,6 +56,28 @@
       "js": [
         "parser.js",
         "clarity-content.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://192.168.10.222/*"
+      ],
+      "js": [
+        "pacs-content.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://192.168.10.12/instahms/*",
+        "http://192.168.10.222/*",
+        "https://192.168.11.143/*",
+        "http://localhost:3000/*"
+      ],
+      "js": [
+        "login-content.js"
       ],
       "run_at": "document_idle"
     }

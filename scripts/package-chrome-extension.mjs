@@ -50,8 +50,17 @@ archive.append(JSON.stringify(chromeManifest, null, 2) + "\n", {
 for (const file of [
   "background.js",
   "clarity-content.js",
+  "crypto-vault.js",
   "hms-content.js",
+  "login-content.js",
+  "pacs-content.js",
   "parser.js",
+  "options.html",
+  "options.js",
+  "popup.html",
+  "popup.js",
+  "unlock.html",
+  "unlock.js",
 ]) {
   archive.file(path.join(srcDir, file), { name: file });
 }

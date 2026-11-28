@@ -5,6 +5,24 @@
     return (value || "").replace(/\s+/g, " ").trim();
   }
 
+  function toTitleCase(value) {
+    return cleanText(value)
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ");
+  }
+
+  function formatPatientName(rawName, targetApp) {
+    let name = cleanText(rawName);
+    if (!name) return "";
+    if (targetApp === "irlog") {
+      // Strip leading honorific titles (e.g. "Mrs.", "Mr.", "Dr.", "Ms.")
+      name = name.replace(/^(?:(?:mr|mrs|ms|miss|dr|prof|smt|shri|kumari|master|baby(?:\s+of)?)\.?\s+)+/i, "");
+    }
+    return toTitleCase(name);
+  }
+
   function normalizeLabel(labelText) {
     return cleanText(labelText).replace(/[:.\s/]+/g, "").toLowerCase();
   }
@@ -62,9 +80,13 @@
       if (!valueCell || !valueCell.classList.contains("forminfo")) continue;
 
       const key = normalizeLabel(labelCell.textContent);
-      const innerDiv = valueCell.querySelector("div[title]");
+      const clone = valueCell.cloneNode(true);
+      clone
+        .querySelectorAll("button, [data-hms-bridge-ui]")
+        .forEach((el) => el.remove());
+      const innerDiv = clone.querySelector("div[title]");
       const rawValue = cleanText(
-        valueCell.textContent || (innerDiv ? innerDiv.getAttribute("title") : "")
+        clone.textContent || (innerDiv ? innerDiv.getAttribute("title") : "")
       );
 
       if (key === "mrno" || key === "mrn") {
@@ -90,5 +112,6 @@
   global.ClarityHmsParser = {
     parseInstaHmsPatient,
     isInstaHmsLoginPage,
+    formatPatientName,
   };
 })(globalThis);

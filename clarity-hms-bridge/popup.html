@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Send Patient From HMS</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 10px;
+      width: 210px;
+      background: #ffffff;
+      color: #0f172a;
+    }
+    .title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #475569;
+      margin-bottom: 8px;
+    }
+    button.target-btn {
+      display: block;
+      width: 100%;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      border: none;
+      border-radius: 6px;
+      background: #0f766e;
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+    }
+    button.target-btn:hover {
+      background: #0d645d;
+    }
+    button.target-btn:disabled {
+      opacity: 0.6;
+      cursor: default;
+    }
+    button.target-btn.secondary {
+      background: #1e40af;
+    }
+    button.target-btn.secondary:hover {
+      background: #1e3a8a;
+    }
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 6px;
+    }
+    #status {
+      font-size: 11px;
+      color: #b91c1c;
+    }
+    #openOptions {
+      font-size: 11px;
+      color: #64748b;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Send HMS patient to:</div>
+  <button id="sendClarity" class="target-btn" type="button">Send to ClarityMDT</button>
+  <button id="sendIrlog" class="target-btn secondary" type="button">Send to IRLog</button>
+  <div class="footer">
+    <span id="status"></span>
+    <button id="openOptions" type="button">Settings</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ClarityMDT - InstaHMS Bridge Settings</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 16px;
+      min-width: 440px;
+      max-width: 560px;
+      color: #0f172a;
+      background: #f8fafc;
+    }
+    h1 { font-size: 16px; margin: 0 0 4px 0; }
+    p.sub { font-size: 12px; color: #64748b; margin: 0 0 14px 0; }
+    .card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .card-title { font-size: 13px; font-weight: 700; }
+    .card-url { font-size: 11px; color: #64748b; }
+    .feature-list {
+      margin: 0 0 8px 0;
+      padding-left: 16px;
+      font-size: 11px;
+      color: #475569;
+      line-height: 1.45;
+    }
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    label.inline {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+    }
+    input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      accent-color: #0f766e;
+      cursor: pointer;
+    }
+    .creds-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #f1f5f9;
+    }
+    .creds-grid.three {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    input:disabled {
+      background: #f1f5f9;
+      color: #94a3b8;
+    }
+    .pin-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pin-row input {
+      max-width: 150px;
+    }
+    button {
+      border: none;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #0f766e;
+      color: #ffffff;
+    }
+    button.secondary {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    button.danger {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    .status {
+      font-size: 12px;
+      margin-top: 6px;
+      min-height: 16px;
+      color: #0f766e;
+    }
+    .status.error { color: #b91c1c; }
+    .hidden { display: none; }
+    .muted { font-size: 11px; color: #64748b; }
+  </style>
+</head>
+<body>
+  <h1>ClarityMDT - InstaHMS Bridge Settings</h1>
+  <p class="sub">Configure target apps, site permissions, and optional PIN-encrypted credentials.</p>
+
+  <!-- PIN Vault Card -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">PIN Protection (Optional)</div>
+        <div class="muted" id="vaultStateText">Set a PIN (min 4 alphanumeric characters) to save credentials.</div>
+      </div>
+      <button id="lockNowBtn" class="secondary hidden" type="button">Lock Now</button>
+    </div>
+
+    <div id="setupPinBox" class="pin-row hidden">
+      <input type="password" id="newPin" placeholder="Set PIN (4+ chars)" autocomplete="new-password" />
+      <input type="password" id="confirmPin" placeholder="Confirm PIN" autocomplete="new-password" />
+      <button id="setPinBtn" type="button">Set PIN</button>
+    </div>
+
+    <div id="unlockPinBox" class="pin-row hidden">
+      <input type="password" id="unlockPin" placeholder="Enter PIN" autocomplete="off" />
+      <button id="unlockBtn" type="button">Unlock</button>
+      <button id="resetVaultBtn" class="danger" type="button">Forgot PIN? Reset Credentials</button>
+    </div>
+
+    <div id="pinStatus" class="status"></div>
+  </div>
+
+  <!-- ClarityMDT -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">ClarityMDT</div>
+        <div class="card-url">https://192.168.11.143</div>
+      </div>
+    </div>
+    <div class="controls-row">
+      <label class="inline">
+        <input type="checkbox" id="enableClarity" />
+        <span>Enable Send to ClarityMDT</span>
+      </label>
+      <label class="inline">
+        <input type="checkbox" id="permClarity" />
+        <span>Site Permission</span>
+      </label>
+    </div>
+    <ul class="feature-list">
+      <li><strong>Toolbar Push:</strong> Send patient details from InstaHMS directly to New Case.</li>
+      <li><strong>Fetch from HMS:</strong> Auto-fill Name, Age &amp; Gender from MRN (with SN00 padding).</li>
+      <li><strong>PACS Integration:</strong> Open patient studies or saved study links from Case Details.</li>
+    </ul>
+    <div class="creds-grid">
+      <input type="text" id="clarityUser" placeholder="Username / Login ID" disabled />
+      <input type="password" id="clarityPass" placeholder="Password" disabled />
+    </div>
+  </div>
+
+  <!-- IRLog -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">IRLog</div>
+        <div class="card-url">https://192.168.11.143/irlog</div>
+      </div>
+    </div>
+    <div class="controls-row">
+      <label class="inline">
+        <input type="checkbox" id="enableIrlog" />
+        <span>Enable Send to IRLog</span>
+      </label>
+      <label class="inline">
+        <input type="checkbox" id="permIrlog" />
+        <span>Site Permission</span>
+      </label>
+    </div>
+    <ul class="feature-list">
+      <li><strong>Toolbar Push:</strong> Open a pre-filled New Appointment modal on Worklist.</li>
+      <li><strong>On-Blur HMS Lookup:</strong> Auto-fetch from InstaHMS when MRN isn't in IRLog.</li>
+      <li><strong>PACS Button:</strong> Open Medsynapse PACS studies from Procedure Log view mode.</li>
+    </ul>
+    <div class="creds-grid">
+      <input type="text" id="irlogUser" placeholder="Username" disabled />
+      <input type="password" id="irlogPass" placeholder="Password" disabled />
+    </div>
+  </div>
+
+  <!-- InstaHMS -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">InstaHMS</div>
+        <div class="card-url">http://192.168.10.12/instahms</div>
+      </div>
+    </div>
+    <div class="controls-row">
+      <label class="inline">
+        <input type="checkbox" id="permInstahms" />
+        <span>Site Permission</span>
+      </label>
+    </div>
+    <ul class="feature-list">
+      <li><strong>Outpatient List Shortcuts:</strong> Adds <em>Cnslt</em> and <em>EMR</em> new-tab buttons next to each patient.</li>
+      <li><strong>EMR Page:</strong> Adds <em>PACS</em> button next to MR No. and enables scraping to ClarityMDT/IRLog.</li>
+    </ul>
+    <div class="creds-grid three">
+      <input type="text" id="hmsHospital" placeholder="Hospital" disabled />
+      <input type="text" id="hmsUser" placeholder="Username" disabled />
+      <input type="password" id="hmsPass" placeholder="Password" disabled />
+    </div>
+  </div>
+
+  <!-- Medsynapse PACS -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <div class="card-title">Medsynapse PACS</div>
+        <div class="card-url">http://192.168.10.222</div>
+      </div>
+    </div>
+    <div class="controls-row">
+      <label class="inline">
+        <input type="checkbox" id="permPacs" />
+        <span>Site Permission</span>
+      </label>
+    </div>
+    <ul class="feature-list">
+      <li><strong>Direct MRN Search:</strong> Opens PACS, sets Time Frame to All, and searches by MRN.</li>
+      <li><strong>Copy Study Link:</strong> Adds a <em>Link</em> button on each study row to save direct links in ClarityMDT.</li>
+    </ul>
+    <div class="creds-grid">
+      <input type="text" id="pacsUser" placeholder="Username" disabled />
+      <input type="password" id="pacsPass" placeholder="Password" disabled />
+    </div>
+  </div>
+
+  <div class="pin-row">
+    <button id="saveCredsBtn" type="button" disabled>Save Credentials</button>
+    <span id="saveStatus" class="status"></span>
+  </div>
+
+  <script src="crypto-vault.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>
